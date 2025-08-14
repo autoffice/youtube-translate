@@ -29,6 +29,7 @@ from tools.trans_llm import TranslatorClass
 import tenacity
 from tools.merge_subtitle import SubtitleMerger
 import subprocess
+import torch
 
 PROXY = "127.0.0.1:7890"
 proxies = None
@@ -94,7 +95,17 @@ def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndNam
     if language=="zh":
         initial_prompt="简体"
 
-    model = WhisperModel(modelName, device="cuda", compute_type="float16", download_root="faster-whisper_models", local_files_only=False)
+    if torch.backends.mps.is_available():
+        device = 'mps'
+        compute_type = 'float16'
+    elif  torch.cuda.is_available():
+        device = 'cuda'
+        compute_type = 'float16'
+    else:
+        device = 'cpu'
+        compute_type = 'float32'
+
+    model = WhisperModel(modelName, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
     print("Whisper model loaded.")
 
     # faster-whisper
@@ -188,7 +199,17 @@ def transcribeAudioZh(path, modelName="base.en", language="en",srtFilePathAndNam
     END_INTERPUNCTION = ["。", "！", "？", "…", "；", "，", "、", ",", ".", "!", "?", ";"]
     ENGLISH_AND_NUMBER_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-    model = WhisperModel(modelName, device="cuda", compute_type="float16", download_root="faster-whisper_models", local_files_only=False)
+    if torch.backends.mps.is_available():
+        device = 'mps'
+        compute_type = 'float16'
+    elif  torch.cuda.is_available():
+        device = 'cuda'
+        compute_type = 'float16'
+    else:
+        device = 'cpu'
+        compute_type = 'float32'
+
+    model = WhisperModel(modelName, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
     segments, _ = model.transcribe(audio=path,  language="zh", word_timestamps=True, initial_prompt="简体")
     index = 1
     subs = []

@@ -1,5 +1,4 @@
 from tools.audio_remove import audio_remove
-from tools.warning_file import WarningFile
 
 import os
 import copy
@@ -75,8 +74,6 @@ paramDictTemplate = {
     "audio zh transcribe model": "medium", # 中文语音转文字模型名称
     "video zh preview": True # [工作流程开关]视频预览
 }
-diagnosisLog = None
-executeLog = None
 
 # 默认utf-8编码
 os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -108,15 +105,12 @@ def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndNam
     if language=="zh":
         initial_prompt="简体"
 
-    if torch.backends.mps.is_available():
-        device = 'mps'
-        compute_type = 'float16'
-    elif  torch.cuda.is_available():
+    if  torch.cuda.is_available():
         device = 'cuda'
         compute_type = 'float16'
     else:
         device = 'cpu'
-        compute_type = 'int8_float32'
+        compute_type = 'int8'
 
     model = WhisperModel(modelName, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
     logging.info("Whisper model loaded.")
@@ -212,15 +206,12 @@ def transcribeAudioZh(path, modelName="base.en", language="en",srtFilePathAndNam
     END_INTERPUNCTION = ["。", "！", "？", "…", "；", "，", "、", ",", ".", "!", "?", ";"]
     ENGLISH_AND_NUMBER_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-    if torch.backends.mps.is_available():
-        device = 'mps'
-        compute_type = 'float16'
-    elif  torch.cuda.is_available():
+    if  torch.cuda.is_available():
         device = 'cuda'
         compute_type = 'float16'
     else:
         device = 'cpu'
-        compute_type = 'int8_float32'
+        compute_type = 'int8'
 
     model = WhisperModel(modelName, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
     segments, _ = model.transcribe(audio=path,  language="zh", word_timestamps=True, initial_prompt="简体")
@@ -264,7 +255,7 @@ def srtSentanceMerge(sourceSrtFilePathAndName, OutputSrtFilePathAndName):
         logging.info("No subtitle found.")
         return False
     
-    diagnosisLog.write("\n<Sentence Merge Section>", False)
+    logging.info("<Sentence Merge Section>")
 
     subPorcessingIndex = 1
     subItemList = []
@@ -279,7 +270,7 @@ def srtSentanceMerge(sourceSrtFilePathAndName, OutputSrtFilePathAndName):
         if endSentenceIndex != -1 and endSentenceIndex != len(subItem.content) - 1:
             logString = f"Warning: Sentence (index:{endSentenceIndex}) not end at the end of the subtitle.\n"
             logString += f"Content: {subItem.content}"
-            diagnosisLog.write(logString)
+            logging.info(logString)
     
         # 以后一个字幕，直接拼接送入就可以了
         if subItem == subList[-1]:
@@ -619,7 +610,7 @@ def voiceConnect(sourceDir, outputAndPath):
     finalAudioEnd += AudioSegment.from_wav(finalAudioFileAndPath).duration_seconds * 1000
     duration = max(duration, finalAudioEnd)
 
-    diagnosisLog.write("\n<Voice connect section>", False)
+    logging.info("<Voice connect section>")
 
     # 初始化一个空的音频段
     combined = AudioSegment.silent(duration=duration)
@@ -640,12 +631,12 @@ def voiceConnect(sourceDir, outputAndPath):
                 if speedUp > MAX_SPEED_UP:
                     # 转换为 HH:MM:SS 格式
                     logStr = f"Warning: The audio {i+1} , at {timeStr} , is too short, speed up is {speedUp}."
-                    diagnosisLog.write(logStr)
+                    logging.info(logStr)
                 
                 # 音频如果提速一个略大于1，则speedup函数可能会出现一个错误的音频，所以这里确定最小的speedup为1.01
                 if speedUp < MIN_SPEED_UP:
                     logStr = f"Warning: The audio {i+1} , at {timeStr} , speed up {speedUp} is too near to 1.0. Set to {MIN_SPEED_UP} forcibly."
-                    diagnosisLog.write(logStr)
+                    logging.info(logStr)
                     speedUp = MIN_SPEED_UP
                 audio = audio.speedup(playback_speed=speedUp)
 
@@ -720,13 +711,6 @@ if __name__ == "__main__":
     if not os.path.exists(workPath):
         os.makedirs(workPath)
         logging.info(f"Directory {workPath} created.")
-    
-    # 日志
-    logFileName = "diagnosis.log"
-    diagnosisLog = WarningFile(os.path.join(workPath, logFileName))
-    # 执行日志文件的格式为excute_yyyyMMdd_HHmmss.log
-    logFileName = "execute_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
-    executeLog = WarningFile(os.path.join(workPath, logFileName))
 
     nowString = str(datetime.datetime.now())
     logging.info(f"Start at: {nowString}")

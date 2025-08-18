@@ -3,6 +3,7 @@ import json
 import concurrent.futures
 import time
 import tenacity
+import logging
 
 DEFAULT_URL = "https://api.openai.com/v1/"
 
@@ -117,8 +118,8 @@ def main():
     text = "This is an example text to be translated."
     max_tokens = 1200
     result = translator.process_text(text, max_tokens)
-    print("Translated text:", result['text_result'])
-    print("Process time:", result['time'])
+    logging.info("Translated text: %s", result['text_result'])
+    logging.info("Process time: %s", result['time'])
     
     # 批量文本翻译
     texts = [
@@ -128,8 +129,8 @@ def main():
     ]
     results = translator.translate_batch(texts, max_tokens)
     for i, result in enumerate(results, 1):
-        print(f"Translated text {i}:", result['text_result'])
-        print(f"Process time {i}:", result['time'])
+        logging.info("Translated text %s: %s", i, result['text_result'])
+        logging.info("Process time %s: %s", i, result['time'])
 
 if __name__ == '__main__':
     main()

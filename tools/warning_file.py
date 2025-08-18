@@ -1,5 +1,6 @@
 import io
 import copy
+import logging
 
 class WarningFile:
     def __init__(self, file_path, append=False):
@@ -14,7 +15,7 @@ class WarningFile:
         self.file.write(message)
         self.file.write('\n')
         if printMessage:
-            print(message)
+            logging.info(message)
         self.file.flush()
         
     def close(self):    

@@ -1,4 +1,5 @@
 import subprocess
+import logging
 
 def add_subtitles_and_mix_audio(input_video, 
                                 input_subtitle, 
@@ -15,9 +16,9 @@ def add_subtitles_and_mix_audio(input_video,
       input_audio2 (str): 第二个音频文件的路径（例如人声音轨）。
       output_video (str): 输出视频文件的路径。
     """
-    print("正在添加字幕和音频到视频中...")
+    logging.info("正在添加字幕和音频到视频中...")
     input_subtitle = input_subtitle.replace("\\", "/")
-    print("input_subtitle: ", input_subtitle)
+    logging.info("input_subtitle: %s", input_subtitle)
     # 构建 FFmpeg 命令
     command = [
         'ffmpeg',
@@ -38,9 +39,9 @@ def add_subtitles_and_mix_audio(input_video,
     # 执行命令
     try:
         subprocess.run(command, check=True)
-        print("字幕和音频已成功添加到视频中。")
+        logging.info("字幕和音频已成功添加到视频中。")
     except subprocess.CalledProcessError as e:
-        print(f"FFmpeg 命令执行失败：{e}")
+        logging.info(f"FFmpeg 命令执行失败：{e}")
 
 
 def main():

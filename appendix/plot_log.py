@@ -1,5 +1,6 @@
 import json
 import sys
+import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,7 +9,7 @@ import numpy as np
 if __name__ == '__main__':
     with open(sys.argv[1], 'r', encoding='utf8') as f:
         log = np.asarray(json.load(f))
-    print(np.min(log, axis=0))
+    logging.info("%s", np.min(log, axis=0))
     trn_loss = log[:, 0]
     val_loss = log[:, 1]
 

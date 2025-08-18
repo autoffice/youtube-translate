@@ -1,4 +1,5 @@
 import pysubs2
+import logging
 
 class SubtitleMerger:
     def __init__(self, 
@@ -52,7 +53,7 @@ class SubtitleMerger:
 
         # Save the merged subtitles
         merged_subs.save(self.output_path)
-        print(f"Merged subtitles saved to: {self.output_path}")
+        logging.info(f"Merged subtitles saved to: {self.output_path}")
 
 
 def main():

@@ -1,4 +1,5 @@
 import os
+import logging
 
 import librosa
 import numpy as np
@@ -113,25 +114,25 @@ def audio_remove(audioFileNameAndPath, voiceFileNameAndPath, instrumentFileNameA
     else:
         device = torch.device('cpu')
     
-    print("Loading model " + device.type)
+    logging.info("Loading model " + device.type)
     model = nets.CascadedNet(AUDIO_REMOVE_FFT_SIZE, AUDIO_REMOVE_HOP_SIZE, 32, 128)#模型参数
     model.load_state_dict(torch.load(modelNameAndPath, map_location='cpu'))
     model.to(device)
-    print("Model loaded")
+    logging.info("Model loaded")
 
-    print('loading wave source ' + audioFileNameAndPath)
+    logging.info('loading wave source ' + audioFileNameAndPath)
     X, sr = librosa.load(
         audioFileNameAndPath, sr=44100, mono=False, dtype=np.float32, res_type='kaiser_fast'
     )
-    print("Wave source loaded")
+    logging.info("Wave source loaded")
 
     if X.ndim == 1:
         # mono to stereo
         X = np.asarray([X, X])
 
-    print('stft of wave source...', end=' ')
+    logging.info('stft of wave source...')
     X_spec = spec_utils.wave_to_spectrogram(X, AUDIO_REMOVE_HOP_SIZE, AUDIO_REMOVE_FFT_SIZE)
-    print('done')
+    logging.info('done')
 
     sp = Separator(
         model=model,
@@ -142,14 +143,14 @@ def audio_remove(audioFileNameAndPath, voiceFileNameAndPath, instrumentFileNameA
     )
 
     y_spec, v_spec = sp.separate_tta(X_spec)
-    print('inverse stft of instruments...', end=' ')
+    logging.info('inverse stft of instruments...')
     wave = spec_utils.spectrogram_to_wave(y_spec, AUDIO_REMOVE_HOP_SIZE)
-    print('done')
+    logging.info('done')
     sf.write(instrumentFileNameAndPath, wave.T, sr)
 
-    print('inverse stft of vocals...', end=' ')
+    logging.info('inverse stft of vocals...')
     wave = spec_utils.spectrogram_to_wave(v_spec, hop_length=AUDIO_REMOVE_HOP_SIZE)
-    print('done')
+    logging.info('done')
     sf.write(voiceFileNameAndPath, wave.T, sr)
     
 

@@ -3,6 +3,7 @@ import os
 import srt
 import json
 import IPython
+import logging
 
 def stringToVoice(url, string, outputFile):
     data = {
@@ -28,7 +29,7 @@ if __name__ == "__main__":
     paramDirPathAndName = input("Please input the path and name of the parameter file: ")
     
     if not os.path.exists(paramDirPathAndName):
-        print("Please edit the file and run the script again.")
+        logging.info("Please edit the file and run the script again.")
         exit(0)
 
     paramDict = load_param(paramDirPathAndName)
@@ -53,15 +54,15 @@ if __name__ == "__main__":
         if index < 1 or index >= len(subTitleList) + 1:
             continue
         index -= 1
-        print(voiceMapSrt[index].content)
-        print(subTitleList[index].content)
+        logging.info(voiceMapSrt[index].content)
+        logging.info(subTitleList[index].content)
         voiceFileName = voiceMapSrt[index].content
         voiceFileAndPath = os.path.join(voiceDir, voiceFileName)
 
-        print("redo file: ", voiceFileAndPath)
+        logging.info("redo file: %s", voiceFileAndPath)
         # delete the file if it exists
         if os.path.exists(voiceFileAndPath):
-            print("Delete the file: ", voiceFileAndPath)
+            logging.info("Delete the file: %s", voiceFileAndPath)
             os.remove(voiceFileAndPath)
         
         stringToVoice(url, subTitleList[index].content, voiceFileAndPath)

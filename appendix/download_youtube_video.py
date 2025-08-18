@@ -1,6 +1,7 @@
 from os import makedirs
 from pytube import YouTube
 from pytube.helpers import safe_filename
+import logging
 
 
 def download_youtube_video(url, itag=None, audio_only=False, output_path=None,
@@ -40,11 +41,11 @@ def download_youtube_video(url, itag=None, audio_only=False, output_path=None,
         stream = video.streams.get_by_itag(itag)
     else:
         stream = video.streams.filter(only_audio=audio_only).first()
-    print('Download Started: %s' % video.title)
+    logging.info('Download Started: %s', video.title)
     if filename:
         filename = safe_filename(filename)
     stream.download(output_path=output_path, filename=filename)
     file_type = '.' + stream.mime_type.split('/')[1]
     filename = stream.default_filename if filename is None else filename + file_type
-    print('Download Complete! Saved to file: %s' % filename)
+    logging.info('Download Complete! Saved to file: %s', filename)
     return filename

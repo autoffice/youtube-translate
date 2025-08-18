@@ -30,6 +30,25 @@ import tenacity
 from tools.merge_subtitle import SubtitleMerger
 import subprocess
 import torch
+import logging
+def enable_whisper_debug():
+    # 让 CTranslate2 输出更详细的日志
+    os.environ["CT2_VERBOSE"] = "1"
+
+    # 仅提升 faster_whisper 与 ctranslate2 的日志级别到 DEBUG
+    logging.basicConfig(level=logging.INFO)
+    for name in ("faster_whisper", "ctranslate2"):
+        logger = logging.getLogger(name)
+        logger.setLevel(logging.DEBUG)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setLevel(logging.DEBUG)
+            formatter = logging.Formatter("[%(name)s][%(levelname)s] %(message)s")
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+
+import atexit
+import time
 
 PROXY = "127.0.0.1:7890"
 proxies = None
@@ -667,6 +686,19 @@ def envCheck():
 
 if __name__ == "__main__":
 
+    # 统计运行耗时（秒），在正常或异常退出时打印
+    _START_TS = time.time()
+    def _print_elapsed():
+        try:
+            secs = time.time() - _START_TS
+            print(f"总耗时: {secs:.2f} 秒")
+        except Exception:
+            pass
+    atexit.register(_print_elapsed)
+
+    # 打开 WhisperModel 的调试日志
+    enable_whisper_debug()
+
     if not envCheck():
         exit(-1)
 
@@ -1018,6 +1050,3 @@ if __name__ == "__main__":
 
     executeLog.write("All done!!")
     print("dir: " + workPath)
-
-    # push any key to exit
-    input("Press any key to exit...")

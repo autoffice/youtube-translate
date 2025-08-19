@@ -112,11 +112,30 @@ def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndNam
         device = 'cpu'
         compute_type = 'int8'
 
-    model = WhisperModel(modelName, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
-    logging.info("Whisper model loaded.")
+    cpu_threads = max(1, (os.cpu_count() or 4) - 1)
+    model = WhisperModel(
+        modelName,
+        device=device,
+        compute_type=compute_type,
+        download_root="faster-whisper_models",
+        local_files_only=False,
+        cpu_threads=cpu_threads,
+        num_workers=1,
+    )
+    logging.info(f"Whisper model loaded. cpu_threads={cpu_threads}, device={device}, compute_type={compute_type}")
 
     # faster-whisper
-    segments, _ = model.transcribe(audio=path,  language=language, word_timestamps=True, initial_prompt=initial_prompt)
+    segments, _ = model.transcribe(
+        audio=path,
+        language=language,
+        word_timestamps=True,
+        initial_prompt=initial_prompt,
+        vad_filter=False,
+        beam_size=1,
+        best_of=1,
+        condition_on_previous_text=False,
+        temperature=0.0,
+    )
 
     # 转换为srt的Subtitle对象
     index = 1
@@ -213,8 +232,27 @@ def transcribeAudioZh(path, modelName="base.en", language="en",srtFilePathAndNam
         device = 'cpu'
         compute_type = 'int8'
 
-    model = WhisperModel(modelName, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
-    segments, _ = model.transcribe(audio=path,  language="zh", word_timestamps=True, initial_prompt="简体")
+    cpu_threads = max(1, (os.cpu_count() or 4) - 1)
+    model = WhisperModel(
+        modelName,
+        device=device,
+        compute_type=compute_type,
+        download_root="faster-whisper_models",
+        local_files_only=False,
+        cpu_threads=cpu_threads,
+        num_workers=1,
+    )
+    segments, _ = model.transcribe(
+        audio=path,
+        language="zh",
+        word_timestamps=True,
+        initial_prompt="简体",
+        vad_filter=False,
+        beam_size=1,
+        best_of=1,
+        condition_on_previous_text=False,
+        temperature=0.0,
+    )
     index = 1
     subs = []
     for segment in segments:
@@ -688,6 +726,15 @@ if __name__ == "__main__":
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
+    # 为 CPU 后端设置并行线程数，提升利用率（需在模型创建前设置）
+    _threads = max(1, (os.cpu_count() or 4) - 1)
+    os.environ["OMP_NUM_THREADS"] = str(_threads)
+    os.environ["MKL_NUM_THREADS"] = str(_threads)
+    os.environ["OPENBLAS_NUM_THREADS"] = str(_threads)
+    os.environ["VECLIB_MAXIMUM_THREADS"] = str(_threads)
+    os.environ["MKL_DYNAMIC"] = "FALSE"
+    logging.info(f"CPU threads configured: {_threads}")
+
     # 打开 WhisperModel 的调试日志（仅设置等级，向上游传播）
     enable_whisper_debug()
 
@@ -712,8 +759,6 @@ if __name__ == "__main__":
         os.makedirs(workPath)
         logging.info(f"Directory {workPath} created.")
 
-    nowString = str(datetime.datetime.now())
-    logging.info(f"Start at: {nowString}")
     logging.info("Params\n" + json.dumps(paramDict, indent=4) + "\n")
 
     # 下载视频
@@ -727,7 +772,6 @@ if __name__ == "__main__":
             if os.path.exists(viedoFileNameAndPath):
                 logging.info(f"Video {videoId} already exists.")
                 logging.info(f"[WORK -] Skip downloading video.")
-                logging.info("Now at: " + str(datetime.datetime.now()))
             else:
                 yt = YouTube(f'https://www.youtube.com/watch?v={videoId}', proxies=proxies, on_progress_callback=on_progress)
                 video  = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').asc().first()
@@ -755,7 +799,6 @@ if __name__ == "__main__":
             if os.path.exists(voiceFhdFileNameAndPath):
                 logging.info(f"Video {videoId} already exists.")
                 logging.info(f"[WORK -] Skip downloading video.")
-                logging.info("Now at: " + str(datetime.datetime.now()))
             else:
                 logging.info(f"Try to downloading more high-definition video {videoId} to {voiceFhdFileNameAndPath}")
                 yt = YouTube(f'https://www.youtube.com/watch?v={videoId}', proxies=proxies, on_progress_callback=on_progress)
@@ -771,8 +814,6 @@ if __name__ == "__main__":
         logStr = "[WORK -] Skip downloading high-definition video."
         logging.info(logStr)
 
-    # 打印当前系统时间
-    logging.info("Now at: " + str(datetime.datetime.now()))
 
     # 视频转声音提取
     audioFileName = f"{videoId}.wav"

@@ -112,30 +112,9 @@ def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndNam
         device = 'cpu'
         compute_type = 'int8'
 
-    cpu_threads = max(1, (os.cpu_count() or 4) - 1)
-    model = WhisperModel(
-        modelName,
-        device=device,
-        compute_type=compute_type,
-        download_root="faster-whisper_models",
-        local_files_only=False,
-        cpu_threads=cpu_threads,
-        num_workers=1,
-    )
-    logging.info(f"Whisper model loaded. cpu_threads={cpu_threads}, device={device}, compute_type={compute_type}")
-
-    # faster-whisper
-    segments, _ = model.transcribe(
-        audio=path,
-        language=language,
-        word_timestamps=True,
-        initial_prompt=initial_prompt,
-        vad_filter=False,
-        beam_size=1,
-        best_of=1,
-        condition_on_previous_text=False,
-        temperature=0.0,
-    )
+    model = WhisperModel(modelName, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
+    logging.info("Whisper model loaded.")
+    segments, _ = model.transcribe(audio=path,  language=language, word_timestamps=True, initial_prompt=initial_prompt)
 
     # 转换为srt的Subtitle对象
     index = 1
@@ -232,27 +211,9 @@ def transcribeAudioZh(path, modelName="base.en", language="en",srtFilePathAndNam
         device = 'cpu'
         compute_type = 'int8'
 
-    cpu_threads = max(1, (os.cpu_count() or 4) - 1)
-    model = WhisperModel(
-        modelName,
-        device=device,
-        compute_type=compute_type,
-        download_root="faster-whisper_models",
-        local_files_only=False,
-        cpu_threads=cpu_threads,
-        num_workers=1,
-    )
-    segments, _ = model.transcribe(
-        audio=path,
-        language="zh",
-        word_timestamps=True,
-        initial_prompt="简体",
-        vad_filter=False,
-        beam_size=1,
-        best_of=1,
-        condition_on_previous_text=False,
-        temperature=0.0,
-    )
+    model = WhisperModel(modelName, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
+    segments, _ = model.transcribe(audio=path,  language="zh", word_timestamps=True, initial_prompt="简体")
+
     index = 1
     subs = []
     for segment in segments:
@@ -725,15 +686,6 @@ if __name__ == "__main__":
         format='[%(asctime)s][%(levelname)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-
-    # 为 CPU 后端设置并行线程数，提升利用率（需在模型创建前设置）
-    _threads = max(1, (os.cpu_count() or 4) - 1)
-    os.environ["OMP_NUM_THREADS"] = str(_threads)
-    os.environ["MKL_NUM_THREADS"] = str(_threads)
-    os.environ["OPENBLAS_NUM_THREADS"] = str(_threads)
-    os.environ["VECLIB_MAXIMUM_THREADS"] = str(_threads)
-    os.environ["MKL_DYNAMIC"] = "FALSE"
-    logging.info(f"CPU threads configured: {_threads}")
 
     # 打开 WhisperModel 的调试日志（仅设置等级，向上游传播）
     enable_whisper_debug()

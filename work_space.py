@@ -30,6 +30,7 @@ from tools.merge_subtitle import SubtitleMerger
 import subprocess
 import torch
 import logging
+import argparse
 def enable_whisper_debug():
     # 让 CTranslate2 输出更详细的日志
     os.environ["CT2_VERBOSE"] = "1"
@@ -49,47 +50,15 @@ TTS_MAX_TRY_TIMES = 16
 CHATGPT_URL = "https://api.openai.com/v1/"
 GHATGPT_TERMS_FILE = "tools/terms.json"
 
-paramDictTemplate = {
-    "proxy": "127.0.0.1:7890", # 代理地址，留空则不使用代理
-    "video Id": "eMlx5fFNoYc", # 油管视频ID
-    "work path": "conver\\cheak_valve", # 工作目录
-    "download video": True, # [工作流程开关]下载视频
-    "download fhd video": True, # [工作流程开关]下载1080p视频
-    "extract audio": True, # [工作流程开关]提取音频
-    "audio remove": True, # [工作流程开关]去除音乐
-    "audio remove model path": "models\\baseline.pth", # 去音乐模型路径
-    "audio transcribe": True, # [工作流程开关]语音转文字
-    "audio transcribe model": "base.en", # [工作流程开关]英文语音转文字模型名称
-    "srt merge": True, # [工作流程开关]字幕合并
-    "srt merge translate": True, # [工作流程开关]字幕翻译
-    "srt merge translate tool": "google", # 翻译工具，目前支持google和deepl
-    "srt merge translate key": "", # 翻译工具的key
-    "srt to voice srouce": True, # [工作流程开关]字幕转语音
-    "TTS": "edge", # [工作流程开关]合成语音，目前支持edge和GPT-SoVITS
-    "TTS param": "", # TTS参数，GPT-SoVITS为地址，edge为角色。edge模式下可以不填，建议不要用GPT-SoVITS。
-    "voice connect": True, # [工作流程开关]语音合并
-    "audio zh transcribe": True, # [工作流程开关]合成后的语音转文字
-    "audio zh transcribe model": "medium", # 中文语音转文字模型名称
-    "video zh preview": True # [工作流程开关]视频预览
-}
-
 # 默认utf-8编码
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" # 强制GPU版本cuda
-
-def create_param_template(path):
-    with open(path, "w", encoding="utf-8") as file:
-        json.dump(paramDictTemplate, file, indent=4)
+# os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 def load_param(path):
     with open(path, "r", encoding="utf-8") as file:
         paramDict = json.load(file)
     return paramDict
-
-def download_youtube_video(video_id, fileNameAndPath):
-    from pytubefix import YouTube
-    YouTube(f'https://youtu.be/{video_id}', proxies=proxies).streams.first().download(filename=fileNameAndPath)
 
 def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndName="VIDEO_FILENAME.srt"):
 
@@ -299,23 +268,6 @@ def srtSentanceMerge(sourceSrtFilePathAndName, OutputSrtFilePathAndName):
     # 如果打开错误则返回false
     with open(OutputSrtFilePathAndName, "w", encoding="utf-8") as file:
         file.write(srtContent)
-
-def srt_to_text(srt_path):
-    with open(srt_path, "r", encoding="utf-8") as file:
-        lines = [line.rstrip() for line in file.readlines()]
-    text = ""
-    for line in lines:
-        line = line.replace('\r', '')
-        if line.isdigit():
-            continue
-        if line == "\n":
-            continue
-        if line == "":
-            continue
-        if re.search('\\d{2}:\\d{2}:\\d{2},\\d{3} --> \\d{2}:\\d{2}:\\d{2},\\d{3}', line):
-            continue
-        text += line + '\n'
-    return text
 
 def googleTrans(texts):
     if PROXY == "":
@@ -746,10 +698,16 @@ if __name__ == "__main__":
     if not envCheck():
         exit(-1)
 
-    paramDirPathAndName = './example/1.json'
+    # 命令行参数：参数文件与 videoId
+    parser = argparse.ArgumentParser(description="pytvzhen workspace runner")
+    parser.add_argument('-p', '--param', dest='param_path', default='./example/1.json', help='参数文件路径，默认 ./example/1.json')
+    parser.add_argument('-v', '--video-id', dest='video_id', default=None, help='视频 ID（可覆盖参数文件中的 video Id）')
+    args = parser.parse_args()
+
+    paramDirPathAndName = args.param_path
     paramDict = load_param(paramDirPathAndName)
     workPath = paramDict["work path"]
-    videoId = paramDict["video Id"]
+    videoId = args.video_id if args.video_id else paramDict["video Id"]
     PROXY = paramDict["proxy"]
     audioRemoveModelNameAndPath = paramDict["audio remove model path"]
 

@@ -61,11 +61,9 @@ paramDictTemplate = {
     "audio transcribe": True, # [工作流程开关]语音转文字
     "audio transcribe model": "base.en", # [工作流程开关]英文语音转文字模型名称
     "srt merge": True, # [工作流程开关]字幕合并
-    "srt merge en to text": True, # [工作流程开关]英文字幕转文字
     "srt merge translate": True, # [工作流程开关]字幕翻译
     "srt merge translate tool": "google", # 翻译工具，目前支持google和deepl
     "srt merge translate key": "", # 翻译工具的key
-    "srt merge zh to text": True, # [工作流程开关]中文字幕转文字
     "srt to voice srouce": True, # [工作流程开关]字幕转语音
     "TTS": "edge", # [工作流程开关]合成语音，目前支持edge和GPT-SoVITS
     "TTS param": "", # TTS参数，GPT-SoVITS为地址，edge为角色。edge模式下可以不填，建议不要用GPT-SoVITS。
@@ -633,9 +631,10 @@ def zhVideoPreview(videoFileNameAndPath, voiceFileNameAndPath, insturmentFileNam
 
 
 def voiceConnect(sourceDir, outputAndPath):
-    MAX_SPEED_UP = 1.2  # 最大音频加速
-    MIN_SPEED_UP = 1.05  # 最小音频加速
+    MAX_SPEED_UP = 1.4  # 最大音频加速（超过将截断，允许轻微重叠）
+    MIN_SPEED_UP = 1.2  # 最小音频加速
     MIN_GAP_DURATION = 0.1  # 最小间隔时间，单位秒。低于这个间隔时间就认为音频重叠了
+    CROSSFADE_MS = 30  # 叠加处淡入淡出，降低重叠听感
 
     if not os.path.exists(sourceDir):
         return False
@@ -676,9 +675,13 @@ def voiceConnect(sourceDir, outputAndPath):
                 seconds = audioPosition / 1000.0
                 timeStr = str(datetime.timedelta(seconds=seconds))
                 if speedUp > MAX_SPEED_UP:
-                    # 转换为 HH:MM:SS 格式
-                    logStr = f"Warning: The audio {i+1} , at {timeStr} , is too short, speed up is {speedUp}."
+                    # 超过可接受的最大变速，截断到最大值并允许轻微重叠
+                    logStr = (
+                        f"Warning: The audio {i+1} , at {timeStr} , required speed up is {speedUp:.3f} > MAX_SPEED_UP {MAX_SPEED_UP}. "
+                        f"Capping to {MAX_SPEED_UP} and allowing slight overlap."
+                    )
                     logging.info(logStr)
+                    speedUp = MAX_SPEED_UP
                 
                 # 音频如果提速一个略大于1，则speedup函数可能会出现一个错误的音频，所以这里确定最小的speedup为1.01
                 if speedUp < MIN_SPEED_UP:
@@ -687,6 +690,8 @@ def voiceConnect(sourceDir, outputAndPath):
                     speedUp = MIN_SPEED_UP
                 audio = audio.speedup(playback_speed=speedUp)
 
+        # 叠加前做轻微淡入淡出，降低边界处突兀感
+        audio = audio.fade_in(CROSSFADE_MS).fade_out(CROSSFADE_MS)
         combined = combined.overlay(audio, position=audioPosition)
     
     combined.export(outputAndPath, format="wav")
@@ -892,27 +897,6 @@ if __name__ == "__main__":
         logStr = "[WORK -] Skip sentence merge."
         logging.info(logStr)
 
-    # 英文字幕转文字
-    tetEnFileName = videoId + "_en_merge.txt"
-    tetEnFileNameAndPath = os.path.join(workPath, tetEnFileName)
-    if paramDict["srt merge en to text"]:
-        try:
-            enText = srt_to_text(srtEnFileNameMergeAndPath)
-            logging.info(f"Writing EN text to {tetEnFileNameAndPath}")
-            with open(tetEnFileNameAndPath, "w") as file:
-                file.write(enText)
-            logging.info(f"[WORK o] Write EN text to {tetEnFileNameAndPath} successfully.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Writing EN text to {tetEnFileNameAndPath} failed."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
-            # 这不是关键步骤，所以不退出程序
-            logStr = f"Program will not exit for that the error is not critical."
-            logging.info(logStr)
-    else:
-        logStr = "[WORK -] Skip writing EN text."
-        logging.info(logStr)
 
     # 字幕翻译
     srtZhFileName = videoId + "_zh_merge.srt"
@@ -947,28 +931,6 @@ if __name__ == "__main__":
             sys.exit(-1)
     else:
         logStr = "[WORK -] Skip subtitle translation."
-        logging.info(logStr)
-
-    # 中文字幕转文字
-    textZhFileName = videoId + "_zh_merge.txt"
-    textZhFileNameAndPath = os.path.join(workPath, textZhFileName)
-    if paramDict["srt merge zh to text"]:
-        try:
-            zhText = srt_to_text(srtZhFileNameAndPath)
-            logging.info(f"Writing ZH text to {textZhFileNameAndPath}")
-            with open(textZhFileNameAndPath, "w", encoding="utf-8") as file:
-                file.write(zhText)
-            logging.info(f"[WORK o] Write ZH text to {textZhFileNameAndPath} successfully.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Writing ZH text to {textZhFileNameAndPath} failed."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
-            # 这不是关键步骤，所以不退出程序
-            logStr = f"Program will not exit for that the error is not critical."
-            logging.info(logStr)
-    else:
-        logStr = "[WORK -] Skip writing ZH text."
         logging.info(logStr)
 
     # 字幕转语音

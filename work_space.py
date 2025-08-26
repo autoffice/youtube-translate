@@ -558,28 +558,76 @@ def zhVideoPreview(videoFileNameAndPath, voiceFileNameAndPath, insturmentFileNam
     返回:
         bool: 如果成功生成预览视频，则返回True，否则返回False
     """
-    # 从moviepy.editor导入VideoFileClip的创建音-视频剪辑
-    video_clip = VideoFileClip(videoFileNameAndPath)
+    # 使用 FFmpeg 进行音频混音与字幕烧录
+    if not os.path.exists(videoFileNameAndPath):
+        raise FileNotFoundError(f"Input video not found: {videoFileNameAndPath}")
 
-    # 加载音频
-    voice_clip = None
-    if (voiceFileNameAndPath is not None) and os.path.exists(voiceFileNameAndPath):
-        voice_clip = AudioFileClip(voiceFileNameAndPath)
-    insturment_clip = None
-    if (insturmentFileNameAndPath is not None) and os.path.exists(insturmentFileNameAndPath):
-        insturment_clip = AudioFileClip(insturmentFileNameAndPath)
-    
-    # 组合音频剪辑
-    final_audio = None
-    if voiceFileNameAndPath is not None and insturmentFileNameAndPath is not None:
-        final_audio = CompositeAudioClip([voice_clip, insturment_clip])
-    elif voiceFileNameAndPath is not None:
-        final_audio = voice_clip
-    elif insturmentFileNameAndPath is not None:
-        final_audio = insturment_clip
-    
-    video_clip = video_clip.set_audio(final_audio)  
-    video_clip.write_videofile(outputFileNameAndPath, codec='libx264', audio_codec='aac', remove_temp=True)
+    # 规范化路径为正斜杠，避免 Windows 下 subtitles 过滤器路径转义问题
+    def _norm(p):
+        return p.replace("\\", "/") if p is not None else p
+
+    video_path = _norm(videoFileNameAndPath)
+    voice_path = _norm(voiceFileNameAndPath) if (voiceFileNameAndPath and os.path.exists(voiceFileNameAndPath)) else None
+    inst_path = _norm(insturmentFileNameAndPath) if (insturmentFileNameAndPath and os.path.exists(insturmentFileNameAndPath)) else None
+    srt_path = _norm(srtFileNameAndPath) if (srtFileNameAndPath and os.path.exists(srtFileNameAndPath)) else None
+    output_path = _norm(outputFileNameAndPath)
+
+    # 输入列表与索引跟踪
+    cmd = [
+        'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+        '-i', video_path
+    ]
+    input_index = 1  # 0 为视频
+    voice_idx = None
+    inst_idx = None
+
+    if voice_path is not None:
+        cmd += ['-i', voice_path]
+        voice_idx = input_index
+        input_index += 1
+    if inst_path is not None:
+        cmd += ['-i', inst_path]
+        inst_idx = input_index
+        input_index += 1
+
+    filter_complex = None
+    maps = []
+
+    has_both_audios = (voice_idx is not None and inst_idx is not None)
+    has_single_audio = (voice_idx is not None) ^ (inst_idx is not None)
+
+    if has_both_audios:
+        # 两路音频 -> amix；视频 -> 字幕（如有）
+        if srt_path is not None:
+            filter_complex = f"[{voice_idx}:a][{inst_idx}:a]amix=inputs=2[a];[0:v]subtitles={srt_path}[v]"
+            maps = ['-map', '[v]', '-map', '[a]']
+        else:
+            filter_complex = f"[{voice_idx}:a][{inst_idx}:a]amix=inputs=2[a]"
+            maps = ['-map', '0:v', '-map', '[a]']
+    elif has_single_audio:
+        # 单路音频：无需 amix；视频 -> 字幕（如有）
+        audio_src_idx = voice_idx if voice_idx is not None else inst_idx
+        if srt_path is not None:
+            # 仅视频使用 filter；音频直接 map 输入流
+            cmd += ['-vf', f'subtitles={srt_path}']
+            maps = ['-map', '0:v', '-map', f'{audio_src_idx}:a']
+        else:
+            maps = ['-map', '0:v', '-map', f'{audio_src_idx}:a']
+    else:
+        # 无外部音频：仅字幕（如有），保留原视频音频（若存在）
+        if srt_path is not None:
+            cmd += ['-vf', f'subtitles={srt_path}']
+        # 不显式 map，交由 ffmpeg 选择默认的音频流（若无则输出静音视频）
+
+    if filter_complex is not None:
+        cmd += ['-filter_complex', filter_complex]
+
+    # 编解码与输出
+    cmd += maps + ['-c:v', 'libx264', '-c:a', 'aac', '-shortest', output_path]
+
+    logging.info("使用 FFmpeg 生成带字幕预览视频...")
+    logging.info("Command: %s", ' '.join(cmd))
+    subprocess.run(cmd, check=True)
 
     return True
 

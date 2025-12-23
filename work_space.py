@@ -7,17 +7,14 @@ from pytubefix import YouTube
 from pytubefix.cli import on_progress
 from faster_whisper import WhisperModel
 import srt
-import re
 from pygtrans import Translate
 import requests
 from tqdm import tqdm
 from pydub import AudioSegment
-import chardet
-import asyncio  
+import asyncio
 import edge_tts
 import datetime
-from moviepy.editor import VideoFileClip, AudioFileClip, CompositeAudioClip
-from moviepy.video.tools.subtitles import SubtitlesClip
+from moviepy.editor import VideoFileClip
 import sys
 import traceback
 import deepl
@@ -26,11 +23,12 @@ import math
 import struct
 from tools.trans_llm import TranslatorClass
 import tenacity
-from tools.merge_subtitle import SubtitleMerger
 import subprocess
 import torch
 import logging
 import argparse
+
+
 def enable_whisper_debug():
     # 让 CTranslate2 输出更详细的日志
     os.environ["CT2_VERBOSE"] = "1"
@@ -40,6 +38,7 @@ def enable_whisper_debug():
         logger = logging.getLogger(name)
         logger.setLevel(logging.DEBUG)
         logger.propagate = True
+
 
 import atexit
 import time
@@ -53,35 +52,36 @@ GHATGPT_TERMS_FILE = "tools/terms.json"
 # 默认utf-8编码
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
+
 # os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 def load_param(path):
     with open(path, "r", encoding="utf-8") as file:
-        paramDict = json.load(file)
-    return paramDict
+        param_dict = json.load(file)
+    return param_dict
 
-def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndName="VIDEO_FILENAME.srt"):
 
+def transcribeAudioEn(path, model_name="base.en", language="en", srtFilePathAndName="VIDEO_FILENAME.srt"):
     # 非静音检测阈值，单位为分贝，越小越严格
     NOT_SILENCE_THRESHOLD_DB = -30
 
     END_INTERPUNCTION = ["…", ".", "!", "?", ";"]
     NUMBER_CHARACTERS = "0123456789"
-     # 确保简体中文 
-    initial_prompt=None
-    if language=="zh":
-        initial_prompt="简体"
+    # 确保简体中文
+    initial_prompt = None
+    if language == "zh":
+        initial_prompt = "简体"
 
-    if  torch.cuda.is_available():
+    if torch.cuda.is_available():
         device = 'cuda'
         compute_type = 'float16'
     else:
         device = 'cpu'
         compute_type = 'int8'
 
-    model = WhisperModel(modelName, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
+    model = WhisperModel(model_name, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
     logging.info("Whisper model loaded.")
-    segments, _ = model.transcribe(audio=path,  language=language, word_timestamps=True, initial_prompt=initial_prompt)
+    segments, _ = model.transcribe(audio=path, language=language, word_timestamps=True, initial_prompt=initial_prompt)
 
     # 转换为srt的Subtitle对象
     index = 1
@@ -100,8 +100,8 @@ def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndNam
             # finalWord = finalWord.encode('utf-8')
 
             # 一句结束。但是要特别排除小数点被误认为是一句结尾的情况。
-            if (finalWord[-1] in END_INTERPUNCTION) and not (len(finalWord)>1 and finalWord[-2] in NUMBER_CHARACTERS):
-                pushWord = " " +finalWord
+            if (finalWord[-1] in END_INTERPUNCTION) and not (len(finalWord) > 1 and finalWord[-2] in NUMBER_CHARACTERS):
+                pushWord = " " + finalWord
                 subtitle.content += pushWord
                 subs.append(subtitle)
                 index += 1
@@ -122,7 +122,6 @@ def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndNam
         subs.append(subtitle)
         index += 1
 
-
     logging.info("Transcription complete.")
 
     # 重新校准字幕开头，以字幕开始时间后声音大于阈值的第一帧为准
@@ -139,12 +138,12 @@ def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndNam
         audio.setpos(startFrame)
         readFrames = endFrame - startFrame
         for i in range(readFrames):
-            frame  = audio.readframes(1)
-            if not frame :
+            frame = audio.readframes(1)
+            if not frame:
                 break
-            samples = struct.iter_unpack("<h", frame) 
+            samples = struct.iter_unpack("<h", frame)
             sampleVolumes = []  # 用于存储每个样本的音量值
-            for sample_tuple  in samples:
+            for sample_tuple in samples:
                 # sample是一个样本值
                 # 调用calculate_volume函数计算样本的音量值，并将结果添加到sampleVolumes列表中
                 sample = sample_tuple[0]
@@ -156,9 +155,9 @@ def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndNam
             if maxVolume > notSilenceThreshold:
                 newStartTime = startTime + i / frameRate
                 break
-    
+
         sub.start = datetime.timedelta(seconds=newStartTime)
-    
+
     content = srt.compose(subs)
     with open(srtFilePathAndName, "w", encoding="utf-8") as file:
         file.write(content)
@@ -167,11 +166,12 @@ def transcribeAudioEn(path, modelName="base.en", language="en",srtFilePathAndNam
     logging.info("Output file: " + srtFilePathAndName)
     return True
 
-def transcribeAudioZh(path, modelName="base.en", language="en",srtFilePathAndName="VIDEO_FILENAME.srt"):
+
+def transcribeAudioZh(path, modelName="base.en", language="en", srtFilePathAndName="VIDEO_FILENAME.srt"):
     END_INTERPUNCTION = ["。", "！", "？", "…", "；", "，", "、", ",", ".", "!", "?", ";"]
     ENGLISH_AND_NUMBER_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-    if  torch.cuda.is_available():
+    if torch.cuda.is_available():
         device = 'cuda'
         compute_type = 'float16'
     else:
@@ -179,7 +179,7 @@ def transcribeAudioZh(path, modelName="base.en", language="en",srtFilePathAndNam
         compute_type = 'int8'
 
     model = WhisperModel(modelName, device=device, compute_type=compute_type, download_root="faster-whisper_models", local_files_only=False)
-    segments, _ = model.transcribe(audio=path,  language="zh", word_timestamps=True, initial_prompt="简体")
+    segments, _ = model.transcribe(audio=path, language="zh", word_timestamps=True, initial_prompt="简体")
 
     index = 1
     subs = []
@@ -192,9 +192,9 @@ def transcribeAudioZh(path, modelName="base.en", language="en",srtFilePathAndNam
             subtitle.end = datetime.timedelta(seconds=word.end)
 
             # 排除英文字母+. 情况
-            if (finalWord[-1] in END_INTERPUNCTION and not(finalWord[-1] == "." and len(finalWord)>1 and finalWord[-2] in ENGLISH_AND_NUMBER_CHARACTERS)) \
-                or (subtitle is not None and len(subtitle.content) > 20) :
-                if not ((finalWord[-1] == "." and len(finalWord)>1 and finalWord[-2] in ENGLISH_AND_NUMBER_CHARACTERS) or (subtitle is not None and len(subtitle.content) > 20) ):
+            if (finalWord[-1] in END_INTERPUNCTION and not (finalWord[-1] == "." and len(finalWord) > 1 and finalWord[-2] in ENGLISH_AND_NUMBER_CHARACTERS)) \
+                    or (subtitle is not None and len(subtitle.content) > 20):
+                if not ((finalWord[-1] == "." and len(finalWord) > 1 and finalWord[-2] in ENGLISH_AND_NUMBER_CHARACTERS) or (subtitle is not None and len(subtitle.content) > 20)):
                     pushWord = finalWord[:-1]
                 else:
                     pushWord = finalWord
@@ -213,6 +213,7 @@ def transcribeAudioZh(path, modelName="base.en", language="en",srtFilePathAndNam
     with open(srtFilePathAndName, "w", encoding="utf-8") as file:
         file.write(content)
 
+
 def srtSentanceMerge(sourceSrtFilePathAndName, OutputSrtFilePathAndName):
     srtContent = open(sourceSrtFilePathAndName, "r", encoding="utf-8").read()
     subGenerator = srt.parse(srtContent)
@@ -220,7 +221,7 @@ def srtSentanceMerge(sourceSrtFilePathAndName, OutputSrtFilePathAndName):
     if len(subList) == 0:
         logging.info("No subtitle found.")
         return False
-    
+
     logging.info("<Sentence Merge Section>")
 
     subPorcessingIndex = 1
@@ -237,7 +238,7 @@ def srtSentanceMerge(sourceSrtFilePathAndName, OutputSrtFilePathAndName):
             logString = f"Warning: Sentence (index:{endSentenceIndex}) not end at the end of the subtitle.\n"
             logString += f"Content: {subItem.content}"
             logging.info(logString)
-    
+
         # 以后一个字幕，直接拼接送入就可以了
         if subItem == subList[-1]:
             if subItemProcessing is None:
@@ -253,8 +254,8 @@ def srtSentanceMerge(sourceSrtFilePathAndName, OutputSrtFilePathAndName):
         # 新处理一串字符，则拷贝
         if subItemProcessing is None:
             subItemProcessing = copy.copy(subItem)
-            subItemProcessing.content = '' # 清空内容是为了延续后面拼接的逻辑
-        
+            subItemProcessing.content = ''  # 清空内容是为了延续后面拼接的逻辑
+
         subItemProcessing.index = subPorcessingIndex
         subItemProcessing.end = subItem.end
         subItemProcessing.content += subItem.content
@@ -269,6 +270,7 @@ def srtSentanceMerge(sourceSrtFilePathAndName, OutputSrtFilePathAndName):
     with open(OutputSrtFilePathAndName, "w", encoding="utf-8") as file:
         file.write(srtContent)
 
+
 def googleTrans(texts):
     if PROXY == "":
         client = Translate()
@@ -279,6 +281,7 @@ def googleTrans(texts):
     for txtResponse in textsResponse:
         textsTranslated.append(txtResponse.translatedText)
     return textsTranslated
+
 
 def deeplTranslate(texts, key):
     translator = deepl.Translator(key)
@@ -292,6 +295,7 @@ def deeplTranslate(texts, key):
     textsZh = textZh.split("\n")
     return textsZh
 
+
 def srtFileGoogleTran(sourceFileNameAndPath, outputFileNameAndPath):
     srtContent = open(sourceFileNameAndPath, "r", encoding="utf-8").read()
     subGenerator = srt.parse(srtContent)
@@ -299,15 +303,16 @@ def srtFileGoogleTran(sourceFileNameAndPath, outputFileNameAndPath):
     contentList = []
     for subTitle in subTitleList:
         contentList.append(subTitle.content)
-    
+
     contentList = googleTrans(contentList)
 
     for i in range(len(subTitleList)):
         subTitleList[i].content = contentList[i]
-    
+
     srtContent = srt.compose(subTitleList)
     with open(outputFileNameAndPath, "w", encoding="utf-8") as file:
         file.write(srtContent)
+
 
 def srtFileDeeplTran(sourceFileNameAndPath, outputFileNameAndPath, key):
     srtContent = open(sourceFileNameAndPath, "r", encoding="utf-8").read()
@@ -316,18 +321,19 @@ def srtFileDeeplTran(sourceFileNameAndPath, outputFileNameAndPath, key):
     contentList = []
     for subTitle in subTitleList:
         contentList.append(subTitle.content)
-    
+
     contentList = deeplTranslate(contentList, key)
 
     for i in range(len(subTitleList)):
         subTitleList[i].content = contentList[i]
-    
+
     srtContent = srt.compose(subTitleList)
     with open(outputFileNameAndPath, "w", encoding="utf-8") as file:
         file.write(srtContent)
 
+
 def GPTTranslate(texts, key, model, proxies):
-    translator = TranslatorClass(api_key=key, 
+    translator = TranslatorClass(api_key=key,
                                  base_url=CHATGPT_URL,
                                  model_name=model,
                                  proxies=proxies)
@@ -347,6 +353,7 @@ def GPTTranslate(texts, key, model, proxies):
         textsZh.append(result['text_result'])
     return textsZh
 
+
 def srtFileGPTTran(model, proxies, sourceFileNameAndPath, outputFileNameAndPath, key):
     srtContent = open(sourceFileNameAndPath, "r", encoding="utf-8").read()
     subGenerator = srt.parse(srtContent)
@@ -354,15 +361,16 @@ def srtFileGPTTran(model, proxies, sourceFileNameAndPath, outputFileNameAndPath,
     contentList = []
     for subTitle in subTitleList:
         contentList.append(subTitle.content)
-    
+
     contentList = GPTTranslate(contentList, key, model, proxies)
 
     for i in range(len(subTitleList)):
         subTitleList[i].content = contentList[i]
-    
+
     srtContent = srt.compose(subTitleList)
     with open(outputFileNameAndPath, "w", encoding="utf-8") as file:
         file.write(srtContent)
+
 
 def stringToVoice(url, string, outputFile):
     data = {
@@ -372,17 +380,18 @@ def stringToVoice(url, string, outputFile):
     response = requests.post(url, json=data)
     if response.status_code != 200:
         return False
-    
+
     with open(outputFile, "wb") as f:
         f.write(response.content)
 
     return True
 
+
 def srtToVoice(url, srtFileNameAndPath, outputDir):
     # create output directory if not exists
     if not os.path.exists(outputDir):
         os.makedirs(outputDir)
-    
+
     srtContent = open(srtFileNameAndPath, "r", encoding="utf-8").read()
     subGenerator = srt.parse(srtContent)
     subTitleList = list(subGenerator)
@@ -400,7 +409,7 @@ def srtToVoice(url, srtFileNameAndPath, outputDir):
             while tryTimes < TTS_MAX_TRY_TIMES:
                 if not stringToVoice(url, string, outputNameAndPath):
                     return False
-                
+
                 # 获取outputNameAndPath的时间长度
                 audio = AudioSegment.from_wav(outputNameAndPath)
                 duration = len(audio)
@@ -412,13 +421,13 @@ def srtToVoice(url, srtFileNameAndPath, outputDir):
                     break
 
                 tryTimes += 1
-            
+
             if tryTimes >= TTS_MAX_TRY_TIMES:
                 logging.info(f"Warning Failed to convert {fileName} to voice.")
                 logging.info(f"Convert {fileName} duration: {duration}ms, max volume: {maxVolume}dB")
 
             index += 1
-            pbar.update(1) # update progress bar
+            pbar.update(1)  # update progress bar
 
     voiceMapSrt = copy.deepcopy(subTitleList)
     for i in range(len(voiceMapSrt)):
@@ -427,35 +436,36 @@ def srtToVoice(url, srtFileNameAndPath, outputDir):
     voiceMapSrtFileAndPath = os.path.join(outputDir, "voiceMap.srt")
     with open(voiceMapSrtFileAndPath, "w", encoding="utf-8") as f:
         f.write(voiceMapSrtContent)
-    
+
     srtAtitionalFile = os.path.join(outputDir, "zh.srt")
     with open(srtAtitionalFile, "w", encoding="utf-8") as f:
         f.write(srtContent)
-    
+
     logging.info("Convert srt to voice successfully")
     return True
 
+
 @tenacity.retry(wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),
-                    stop=tenacity.stop_after_attempt(5),
-                    reraise=True)
-def srtToVoiceEdge(srtFileNameAndPath, outputDir, charactor = "zh-CN-XiaoyiNeural"):
+                stop=tenacity.stop_after_attempt(5),
+                reraise=True)
+def srtToVoiceEdge(srtFileNameAndPath, outputDir, charactor="zh-CN-XiaoyiNeural"):
     # create output directory if not exists
     if not os.path.exists(outputDir):
         os.makedirs(outputDir)
-    
+
     srtContent = open(srtFileNameAndPath, "r", encoding="utf-8").read()
     subGenerator = srt.parse(srtContent)
     subTitleList = list(subGenerator)
     index = 1
     fileNames = []
     fileMp3Names = []
-    
+
     async def convertSrtToVoiceEdge(text, path):
         logging.info(f"Start to convert srt to voice into {path}, text: {text}")
         communicate = edge_tts.Communicate(text, charactor)
         await communicate.save(path)
 
-    coroutines  = []
+    coroutines = []
     for subTitle in subTitleList:
         fileMp3Name = str(index) + ".mp3"
         fileName = str(index) + ".wav"
@@ -468,7 +478,7 @@ def srtToVoiceEdge(srtFileNameAndPath, outputDir, charactor = "zh-CN-XiaoyiNeura
     # wait for all coroutines to finish
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(*coroutines))
-    
+
     logging.info("Convert srt to mp3 voice successfully")
 
     # convert mp3 to wav
@@ -488,13 +498,14 @@ def srtToVoiceEdge(srtFileNameAndPath, outputDir, charactor = "zh-CN-XiaoyiNeura
     voiceMapSrtFileAndPath = os.path.join(outputDir, "voiceMap.srt")
     with open(voiceMapSrtFileAndPath, "w", encoding="utf-8") as f:
         f.write(voiceMapSrtContent)
-    
+
     srtAtitionalFile = os.path.join(outputDir, "sub.srt")
     with open(srtAtitionalFile, "w", encoding="utf-8") as f:
         f.write(srtContent)
-    
+
     logging.info("Convert srt to wav voice successfully")
     return True
+
 
 def zhVideoPreview(videoFileNameAndPath, voiceFileNameAndPath, insturmentFileNameAndPath, srtFileNameAndPath, outputFileNameAndPath):
     """
@@ -590,12 +601,12 @@ def voiceConnect(sourceDir, outputAndPath):
 
     if not os.path.exists(sourceDir):
         return False
-    
+
     srtMapFileName = "voiceMap.srt"
     srtMapFileAndPath = os.path.join(sourceDir, srtMapFileName)
     if not os.path.exists(srtMapFileAndPath):
         return False
-    
+
     voiceMapSrtContent = ""
     with open(srtMapFileAndPath, "r", encoding="utf-8") as f:
         voiceMapSrtContent = f.read()
@@ -615,29 +626,29 @@ def voiceConnect(sourceDir, outputAndPath):
     for i in range(len(voiceMapSrt)):
         audioFileAndPath = os.path.join(sourceDir, voiceMapSrt[i].content)
         audio = AudioSegment.from_wav(audioFileAndPath)
-        audio = audio.strip_silence(silence_thresh=-40, silence_len=100) # 去除头尾的静音
+        audio = audio.strip_silence(silence_thresh=-40, silence_len=100)  # 去除头尾的静音
         audioPosition = voiceMapSrt[i].start.total_seconds() * 1000
 
         if i != len(voiceMapSrt) - 1:
             # 检查上这一句的结尾到下一句的开头之间是否有静音，如果没有则需要缩小音频
-            audioEndPosition = audioPosition + audio.duration_seconds * 1000 + MIN_GAP_DURATION *1000
-            audioNextPosition = voiceMapSrt[i+1].start.total_seconds() * 1000
+            audioEndPosition = audioPosition + audio.duration_seconds * 1000 + MIN_GAP_DURATION * 1000
+            audioNextPosition = voiceMapSrt[i + 1].start.total_seconds() * 1000
             if audioNextPosition < audioEndPosition:
-                speedUp = (audio.duration_seconds * 1000 + MIN_GAP_DURATION *1000) / (audioNextPosition - audioPosition)
+                speedUp = (audio.duration_seconds * 1000 + MIN_GAP_DURATION * 1000) / (audioNextPosition - audioPosition)
                 seconds = audioPosition / 1000.0
                 timeStr = str(datetime.timedelta(seconds=seconds))
                 if speedUp > MAX_SPEED_UP:
                     # 超过可接受的最大变速，截断到最大值并允许轻微重叠
                     logStr = (
-                        f"Warning: The audio {i+1} , at {timeStr} , required speed up is {speedUp:.3f} > MAX_SPEED_UP {MAX_SPEED_UP}. "
+                        f"Warning: The audio {i + 1} , at {timeStr} , required speed up is {speedUp:.3f} > MAX_SPEED_UP {MAX_SPEED_UP}. "
                         f"Capping to {MAX_SPEED_UP} and allowing slight overlap."
                     )
                     logging.info(logStr)
                     speedUp = MAX_SPEED_UP
-                
+
                 # 音频如果提速一个略大于1，则speedup函数可能会出现一个错误的音频，所以这里确定最小的speedup为1.01
                 if speedUp < MIN_SPEED_UP:
-                    logStr = f"Warning: The audio {i+1} , at {timeStr} , speed up {speedUp} is too near to 1.0. Set to {MIN_SPEED_UP} forcibly."
+                    logStr = f"Warning: The audio {i + 1} , at {timeStr} , speed up {speedUp} is too near to 1.0. Set to {MIN_SPEED_UP} forcibly."
                     logging.info(logStr)
                     speedUp = MIN_SPEED_UP
                 audio = audio.speedup(playback_speed=speedUp)
@@ -645,13 +656,14 @@ def voiceConnect(sourceDir, outputAndPath):
         # 叠加前做轻微淡入淡出，降低边界处突兀感
         audio = audio.fade_in(CROSSFADE_MS).fade_out(CROSSFADE_MS)
         combined = combined.overlay(audio, position=audioPosition)
-    
+
     combined.export(outputAndPath, format="wav")
     return True
 
+
 def envCheck():
     # 检查环境变量中是否包含 ffmpeg
-        # 尝试调用ffmpeg命令来检查其是否安装
+    # 尝试调用ffmpeg命令来检查其是否安装
     try:
         subprocess.run(["ffmpeg", "-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         ffmpeg_found = True
@@ -666,29 +678,34 @@ def envCheck():
 
     if not ffmpeg_found:
         waringMessage += "未安装ffmpeg，请安装ffmpeg并将其所在目录添加到环境变量PATH中。\n"
-    
+
     if waringMessage:
         logging.info(f"环境依赖警告 {waringMessage} ")
         return False
     else:
         return True
 
+
 if __name__ == "__main__":
 
     # 统计运行耗时（秒），在正常或异常退出时打印
     _START_TS = time.time()
+
+
     def _print_elapsed():
         try:
             secs = time.time() - _START_TS
             logging.info(f"总耗时: {secs:.2f} 秒")
         except Exception:
             pass
+
+
     atexit.register(_print_elapsed)
 
     # 全局基础日志：INFO 级别（统一 handler），带时间戳
     logging.basicConfig(
         level=logging.INFO,
-        format='[%(asctime)s][%(levelname)s] %(message)s',
+        format='[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d %(funcName)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
@@ -699,17 +716,17 @@ if __name__ == "__main__":
         exit(-1)
 
     # 命令行参数：参数文件与 videoId
-    parser = argparse.ArgumentParser(description="pytvzhen workspace runner")
+    parser = argparse.ArgumentParser(description="workspace runner")
     parser.add_argument('-p', '--param', dest='param_path', default='./example/1.json', help='参数文件路径，默认 ./example/1.json')
     parser.add_argument('-v', '--video-id', dest='video_id', default=None, help='视频 ID（可覆盖参数文件中的 video Id）')
     args = parser.parse_args()
 
-    paramDirPathAndName = args.param_path
-    paramDict = load_param(paramDirPathAndName)
-    workPath = paramDict["work path"]
-    videoId = args.video_id if args.video_id else paramDict["video Id"]
-    PROXY = paramDict["proxy"]
-    audioRemoveModelNameAndPath = paramDict["audio remove model path"]
+    param_dict_path = args.param_path
+    param_dict = load_param(param_dict_path)
+    workPath = param_dict["work path"]
+    videoId = args.video_id if args.video_id else param_dict["video Id"]
+    PROXY = param_dict["proxy"]
+    audioRemoveModelNameAndPath = param_dict["audio remove model path"]
 
     proxies = None if not PROXY else {
         'http': f"{PROXY}",
@@ -722,13 +739,13 @@ if __name__ == "__main__":
         os.makedirs(workPath)
         logging.info(f"Directory {workPath} created.")
 
-    logging.info("Params\n" + json.dumps(paramDict, indent=4) + "\n")
+    logging.info("配置\n" + json.dumps(param_dict, indent=4, ensure_ascii=False) + "\n")
 
     # 下载视频
     voiceFileName = f"{videoId}.mp4"
     viedoFileNameAndPath = os.path.join(workPath, voiceFileName)
-    
-    if paramDict["download video"]:
+
+    if param_dict["下载视频"]:
         logging.info(f"Downloading video {videoId} to {viedoFileNameAndPath}")
         try:
             # 如果已经有了，就不下载了
@@ -737,7 +754,7 @@ if __name__ == "__main__":
                 logging.info(f"[WORK -] Skip downloading video.")
             else:
                 yt = YouTube(f'https://www.youtube.com/watch?v={videoId}', proxies=proxies, on_progress_callback=on_progress)
-                video  = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').asc().first()
+                video = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').asc().first()
                 video.download(output_path=workPath, filename=voiceFileName)
                 # go back to the script directory
                 logging.info(f"[WORK o] Download video {videoId} to {viedoFileNameAndPath} whith {video.resolution}.")
@@ -751,12 +768,11 @@ if __name__ == "__main__":
         logStr = "[WORK -] Skip downloading video."
         logging.info(logStr)
 
-    
     # try download more high-definition video
     # 需要单独下载最高分辨率视频，因为pytube下载的1080p视频没音频
     voiceFhdFileName = f"{videoId}_fhd.mp4"
     voiceFhdFileNameAndPath = os.path.join(workPath, voiceFhdFileName)
-    if paramDict["download fhd video"]:
+    if param_dict["下载高清视频"]:
         try:
             # 如果已经有了，就不下载了
             if os.path.exists(voiceFhdFileNameAndPath):
@@ -765,7 +781,7 @@ if __name__ == "__main__":
             else:
                 logging.info(f"Try to downloading more high-definition video {videoId} to {voiceFhdFileNameAndPath}")
                 yt = YouTube(f'https://www.youtube.com/watch?v={videoId}', proxies=proxies, on_progress_callback=on_progress)
-                video  = yt.streams.filter(progressive=False, file_extension='mp4').order_by('resolution').desc().first()
+                video = yt.streams.filter(progressive=False, file_extension='mp4').order_by('resolution').desc().first()
                 video.download(output_path=workPath, filename=voiceFhdFileName)
                 logging.info(f"[WORK o] Download 1080p high-definition {videoId} to {voiceFhdFileNameAndPath} whith {video.resolution}.")
         except:
@@ -777,11 +793,10 @@ if __name__ == "__main__":
         logStr = "[WORK -] Skip downloading high-definition video."
         logging.info(logStr)
 
-
     # 视频转声音提取
     audioFileName = f"{videoId}.wav"
     audioFileNameAndPath = os.path.join(workPath, audioFileName)
-    if paramDict["extract audio"]:
+    if param_dict["extract audio"]:
         # remove the audio file if it exists
         logging.info(f"Extracting audio from {viedoFileNameAndPath} to {audioFileNameAndPath}")
         try:
@@ -798,13 +813,13 @@ if __name__ == "__main__":
     else:
         logStr = "[WORK -] Skip extracting audio."
         logging.info(logStr)
-    
+
     # 去除音频中的音乐
     voiceName = videoId + "_voice.wav"
     voiceNameAndPath = os.path.join(workPath, voiceName)
     insturmentName = videoId + "_insturment.wav"
     insturmentNameAndPath = os.path.join(workPath, insturmentName)
-    if paramDict["audio remove"]:
+    if param_dict["audio remove"]:
         logging.info(f"Removing music from {audioFileNameAndPath} to {voiceNameAndPath} and {insturmentNameAndPath}")
         try:
             audio_remove(audioFileNameAndPath, voiceNameAndPath, insturmentNameAndPath, audioRemoveModelNameAndPath)
@@ -818,14 +833,14 @@ if __name__ == "__main__":
     else:
         logStr = "[WORK -] Skip removing music."
         logging.info(logStr)
-        
+
     # 语音转文字
     srtEnFileName = videoId + "_en.srt"
     srtEnFileNameAndPath = os.path.join(workPath, srtEnFileName)
-    if paramDict["audio transcribe"]:
+    if param_dict["audio transcribe"]:
         try:
             logging.info(f"Transcribing audio from {voiceNameAndPath} to {srtEnFileNameAndPath}")
-            transcribeAudioEn(voiceNameAndPath, paramDict["audio transcribe model"], "en", srtEnFileNameAndPath)
+            transcribeAudioEn(voiceNameAndPath, param_dict["audio transcribe model"], "en", srtEnFileNameAndPath)
             logging.info(f"[WORK o] Transcribe audio from {voiceNameAndPath} to {srtEnFileNameAndPath} successfully.")
         except Exception as e:
             logStr = f"[WORK x] Error: Program blocked while transcribing audio from {voiceNameAndPath} to {srtEnFileNameAndPath}."
@@ -840,7 +855,7 @@ if __name__ == "__main__":
     # 字幕语句合并
     srtEnFileNameMerge = videoId + "_en_merge.srt"
     srtEnFileNameMergeAndPath = os.path.join(workPath, srtEnFileNameMerge)
-    if paramDict["srt merge"]:
+    if param_dict["srt merge"]:
         try:
             logging.info(f"Merging sentences in {srtEnFileNameAndPath} to {srtEnFileNameMergeAndPath}")
             srtSentanceMerge(srtEnFileNameAndPath, srtEnFileNameMergeAndPath)
@@ -855,29 +870,28 @@ if __name__ == "__main__":
         logStr = "[WORK -] Skip sentence merge."
         logging.info(logStr)
 
-
     # 字幕翻译
     srtZhFileName = videoId + "_zh_merge.srt"
     srtZhFileNameAndPath = os.path.join(workPath, srtZhFileName)
-    if paramDict["srt merge translate"]:
+    if param_dict["srt merge translate"]:
         try:
             logging.info(f"Translating subtitle from {srtEnFileNameMergeAndPath} to {srtZhFileNameAndPath}")
-            if paramDict["srt merge translate tool"] == "deepl":
-                if paramDict["srt merge translate key"] == "":
+            if param_dict["srt merge translate tool"] == "deepl":
+                if param_dict["srt merge translate key"] == "":
                     logStr = "[WORK x] Error: DeepL API key is not provided. Please provide it in the parameter file."
                     logging.info(logStr)
                     sys.exit(-1)
-                srtFileDeeplTran(srtEnFileNameMergeAndPath, srtZhFileNameAndPath, paramDict["srt merge translate key"])
-            elif 'gpt' in paramDict["srt merge translate tool"]:
-                if paramDict['srt merge translate key'] == '':
+                srtFileDeeplTran(srtEnFileNameMergeAndPath, srtZhFileNameAndPath, param_dict["srt merge translate key"])
+            elif 'gpt' in param_dict["srt merge translate tool"]:
+                if param_dict['srt merge translate key'] == '':
                     logStr = "[WORK x] Error: GPT API key is not provided. Please provide it in the parameter file."
                     logging.info(logStr)
                     sys.exit(-1)
-                srtFileGPTTran(paramDict['srt merge translate tool'], 
-                               proxies, 
-                               srtEnFileNameMergeAndPath, 
-                               srtZhFileNameAndPath, 
-                               paramDict['srt merge translate key'])
+                srtFileGPTTran(param_dict['srt merge translate tool'],
+                               proxies,
+                               srtEnFileNameMergeAndPath,
+                               srtZhFileNameAndPath,
+                               param_dict['srt merge translate key'])
             else:
                 srtFileGoogleTran(srtEnFileNameMergeAndPath, srtZhFileNameAndPath)
                 logging.info(f"[WORK o] Translate subtitle from {srtEnFileNameMergeAndPath} to {srtZhFileNameAndPath} successfully.")
@@ -892,20 +906,20 @@ if __name__ == "__main__":
         logging.info(logStr)
 
     # 字幕转语音
-    ttsSelect = paramDict["TTS"]
+    ttsSelect = param_dict["TTS"]
     voiceDir = os.path.join(workPath, videoId + "_zh_source")
     voiceSrcSrtName = "zh.srt"
     voiceSrcSrtNameAndPath = os.path.join(voiceDir, voiceSrcSrtName)
     voiceSrcMapName = "voiceMap.srt"
     voiceSrcMapNameAndPath = os.path.join(voiceDir, voiceSrcMapName)
-    if paramDict["srt to voice srouce"]:
+    if param_dict["srt to voice srouce"]:
         try:
             if ttsSelect == "GPT-SoVITS":
                 logging.info(f"Converting subtitle to voice by GPT-SoVITS  in {srtZhFileNameAndPath} to {voiceDir}")
-                voiceUrl = paramDict["TTS param"]
+                voiceUrl = param_dict["TTS param"]
                 srtToVoice(voiceUrl, srtZhFileNameAndPath, voiceDir)
             else:
-                charator = paramDict["TTS param"]
+                charator = param_dict["TTS param"]
                 if charator == "":
                     srtToVoiceEdge(srtZhFileNameAndPath, voiceDir)
                 else:
@@ -921,11 +935,11 @@ if __name__ == "__main__":
     else:
         logStr = "[WORK -] Skip voice conversion."
         logging.info(logStr)
-    
+
     # 语音合并
     voiceConnectedName = videoId + "_zh.wav"
     voiceConnectedNameAndPath = os.path.join(workPath, voiceConnectedName)
-    if paramDict["voice connect"]:
+    if param_dict["voice connect"]:
         try:
             logging.info(f"Connecting voice in {voiceDir} to {voiceConnectedNameAndPath}")
             ret = voiceConnect(voiceDir, voiceConnectedNameAndPath)
@@ -943,17 +957,17 @@ if __name__ == "__main__":
     else:
         logStr = "[WORK -] Skip voice connection."
         logging.info(logStr)
-    
+
     # 合成后的语音转文字
     srtVoiceFileName = videoId + "_zh.srt"
     srtVoiceFileNameAndPath = os.path.join(workPath, srtVoiceFileName)
-    if paramDict["audio zh transcribe"]:
+    if param_dict["audio zh transcribe"]:
         try:
             if os.path.exists(srtVoiceFileNameAndPath):
                 logging.info("srtVoiceFileNameAndPath exists.")
             else:
                 logging.info(f"Transcribing audio from {voiceConnectedNameAndPath} to {srtVoiceFileNameAndPath}")
-                transcribeAudioZh(voiceConnectedNameAndPath, paramDict["audio zh transcribe model"] ,"zh", srtVoiceFileNameAndPath)
+                transcribeAudioZh(voiceConnectedNameAndPath, param_dict["audio zh transcribe model"], "zh", srtVoiceFileNameAndPath)
                 logging.info(f"[WORK o] Transcribe audio from {voiceConnectedNameAndPath} to {srtVoiceFileNameAndPath} successfully.")
         except Exception as e:
             logStr = f"[WORK x] Error: Program blocked while transcribing audio from {voiceConnectedNameAndPath} to {srtVoiceFileNameAndPath}."
@@ -968,7 +982,7 @@ if __name__ == "__main__":
     # 合成预览视频
     previewVideoName = videoId + "_preview.mp4"
     previewVideoNameAndPath = os.path.join(workPath, previewVideoName)
-    if paramDict["video zh preview"]:
+    if param_dict["video zh preview"]:
         try:
             sourceVideoNameAndPath = ""
             if os.path.exists(voiceFhdFileNameAndPath):

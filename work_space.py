@@ -16,7 +16,6 @@ import edge_tts
 import datetime
 from moviepy.editor import VideoFileClip
 import sys
-import traceback
 import deepl
 import wave
 import math
@@ -30,8 +29,6 @@ import argparse
 import atexit
 import time
 
-PROXY = "127.0.0.1:7890"
-proxies = None
 TTS_MAX_TRY_TIMES = 16
 CHATGPT_URL = "https://api.openai.com/v1/"
 GHATGPT_TERMS_FILE = "tools/terms.json"
@@ -53,8 +50,7 @@ def enable_whisper_debug():
 
 def load_param(path):
     with open(path, "r", encoding="utf-8") as file:
-        param_dict = json.load(file)
-    return param_dict
+        return json.load(file)
 
 
 def transcribe_audio_en(path, model_name="base.en", language="en", srt_file_path_and_name="VIDEO_FILENAME.srt"):
@@ -121,8 +117,8 @@ def transcribe_audio_en(path, model_name="base.en", language="en", srt_file_path
     logging.info("Transcription complete.")
 
     # 重新校准字幕开头，以字幕开始时间后声音大于阈值的第一帧为准
-    audio = wave.open(path, 'rb')
-    frame_rate = audio.getframerate()
+    audio_wav = wave.open(path, 'rb')
+    frame_rate = audio_wav.getframerate()
     not_silence_threshold = math.pow(10, not_silence_threshold_db / 20)
     for sub in subs:
         start_time = sub.start.total_seconds()
@@ -131,10 +127,10 @@ def transcribe_audio_en(path, model_name="base.en", language="en", srt_file_path
         end_frame = int(end_time * frame_rate)
 
         new_start_time = start_time
-        audio.setpos(start_frame)
+        audio_wav.setpos(start_frame)
         read_frames = end_frame - start_frame
         for i in range(read_frames):
-            frame = audio.readframes(1)
+            frame = audio_wav.readframes(1)
             if not frame:
                 break
             samples = struct.iter_unpack("<h", frame)
@@ -163,7 +159,7 @@ def transcribe_audio_en(path, model_name="base.en", language="en", srt_file_path
     return True
 
 
-def transcribe_audio_zh(path, model_name="base.en", language="en", srt_file_path_and_name="VIDEO_FILENAME.srt"):
+def transcribe_audio_zh(path, model_name="base.en", srt_file_path_and_name="VIDEO_FILENAME.srt"):
     end_interpunction = ["。", "！", "？", "…", "；", "，", "、", ",", ".", "!", "?", ";"]
     english_and_number_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
@@ -267,8 +263,8 @@ def srt_sentance_merge(source_srt_file_path_and_name, output_srt_file_path_and_n
         file.write(srt_content)
 
 
-def google_trans(texts):
-    if PROXY == "":
+def google_trans(proxies, texts):
+    if proxies['https'] == "":
         client = Translate()
     else:
         client = Translate(proxies={'https': proxies['https']})
@@ -292,7 +288,7 @@ def deepl_translate(texts, key):
     return texts_zh
 
 
-def srt_file_google_tran(source_file_name_and_path, output_file_name_and_path):
+def srt_file_google_tran(proxies, source_file_name_and_path, output_file_name_and_path):
     srt_content = open(source_file_name_and_path, "r", encoding="utf-8").read()
     sub_generator = srt.parse(srt_content)
     sub_title_list = list(sub_generator)
@@ -300,7 +296,7 @@ def srt_file_google_tran(source_file_name_and_path, output_file_name_and_path):
     for subTitle in sub_title_list:
         content_list.append(subTitle.content)
 
-    content_list = google_trans(content_list)
+    content_list = google_trans(proxies, content_list)
 
     for i in range(len(sub_title_list)):
         sub_title_list[i].content = content_list[i]
@@ -407,10 +403,10 @@ def srt_to_voice(url, srt_file_name_and_path, output_dir):
                     return False
 
                 # 获取outputNameAndPath的时间长度
-                audio = AudioSegment.from_wav(output_name_and_path)
-                duration = len(audio)
+                audio_wav = AudioSegment.from_wav(output_name_and_path)
+                duration = len(audio_wav)
                 # 获取最大音量
-                max_volume = audio.max_dBFS
+                max_volume = audio_wav.max_dBFS
 
                 # 如果音频长度小于500ms，则重试，应该是数据有问题了
                 if duration > 600 and max_volume > -15:
@@ -620,22 +616,22 @@ def voice_connect(source_dir, output_and_path):
     combined = AudioSegment.silent(duration=duration)
     for i in range(len(voice_map_srt)):
         audio_file_and_path = os.path.join(source_dir, voice_map_srt[i].content)
-        audio = AudioSegment.from_wav(audio_file_and_path)
-        audio = audio.strip_silence(silence_thresh=-40, silence_len=100)  # 去除头尾的静音
+        audio_wav = AudioSegment.from_wav(audio_file_and_path)
+        audio_wav = audio_wav.strip_silence(silence_thresh=-40, silence_len=100)  # 去除头尾的静音
         audio_position = voice_map_srt[i].start.total_seconds() * 1000
 
         if i != len(voice_map_srt) - 1:
             # 检查上这一句的结尾到下一句的开头之间是否有静音，如果没有则需要缩小音频
-            audio_end_position = audio_position + audio.duration_seconds * 1000 + min_gap_duration * 1000
+            audio_end_position = audio_position + audio_wav.duration_seconds * 1000 + min_gap_duration * 1000
             audio_next_position = voice_map_srt[i + 1].start.total_seconds() * 1000
             if audio_next_position < audio_end_position:
-                speed_up = (audio.duration_seconds * 1000 + min_gap_duration * 1000) / (audio_next_position - audio_position)
+                speed_up = (audio_wav.duration_seconds * 1000 + min_gap_duration * 1000) / (audio_next_position - audio_position)
                 seconds = audio_position / 1000.0
                 time_str = str(datetime.timedelta(seconds=seconds))
                 if speed_up > max_speed_up:
                     # 超过可接受的最大变速，截断到最大值并允许轻微重叠
                     log_str = (
-                        f"Warning: The audio {i + 1} , at {time_str} , required speed up is {speed_up:.3f} > max_speed_up {max_speed_up}. "
+                        f"Warning: The audio_wav {i + 1} , at {time_str} , required speed up is {speed_up:.3f} > max_speed_up {max_speed_up}. "
                         f"Capping to {max_speed_up} and allowing slight overlap."
                     )
                     logging.info(log_str)
@@ -643,14 +639,14 @@ def voice_connect(source_dir, output_and_path):
 
                 # 音频如果提速一个略大于1，则speedup函数可能会出现一个错误的音频，所以这里确定最小的speedup为1.01
                 if speed_up < min_speed_up:
-                    log_str = f"Warning: The audio {i + 1} , at {time_str} , speed up {speed_up} is too near to 1.0. Set to {min_speed_up} forcibly."
+                    log_str = f"Warning: The audio_wav {i + 1} , at {time_str} , speed up {speed_up} is too near to 1.0. Set to {min_speed_up} forcibly."
                     logging.info(log_str)
                     speed_up = min_speed_up
-                audio = audio.speedup(playback_speed=speed_up)
+                audio_wav = audio_wav.speedup(playback_speed=speed_up)
 
         # 叠加前做轻微淡入淡出，降低边界处突兀感
-        audio = audio.fade_in(crossfade_ms).fade_out(crossfade_ms)
-        combined = combined.overlay(audio, position=audio_position)
+        audio_wav = audio_wav.fade_in(crossfade_ms).fade_out(crossfade_ms)
+        combined = combined.overlay(audio_wav, position=audio_position)
 
     combined.export(output_and_path, format="wav")
     return True
@@ -681,19 +677,13 @@ def env_check():
         return True
 
 
-if __name__ == "__main__":
-
+def main():
     # 统计运行耗时（秒），在正常或异常退出时打印
     _START_TS = time.time()
 
-
     def _print_elapsed():
-        try:
-            secs = time.time() - _START_TS
-            logging.info(f"总耗时: {secs:.2f} 秒")
-        except Exception:
-            pass
-
+        secs = time.time() - _START_TS
+        logging.info(f"总耗时: {secs:.2f} 秒")
 
     atexit.register(_print_elapsed)
 
@@ -710,7 +700,7 @@ if __name__ == "__main__":
     if not env_check():
         exit(-1)
 
-    # 命令行参数：参数文件与 videoId
+    # 命令行参数：参数文件与 video_id
     parser = argparse.ArgumentParser(description="workspace runner")
     parser.add_argument('-p', '--param', dest='param_path', default='./example/1.json', help='参数文件路径，默认 ./example/1.json')
     parser.add_argument('-v', '--video-id', dest='video_id', default=None, help='视频 ID（可覆盖参数文件中的 video Id）')
@@ -718,290 +708,268 @@ if __name__ == "__main__":
 
     param_dict_path = args.param_path
     param_dict = load_param(param_dict_path)
-    workPath = param_dict["work path"]
-    videoId = args.video_id if args.video_id else param_dict["video Id"]
-    PROXY = param_dict["proxy"]
-    audioRemoveModelNameAndPath = param_dict["audio remove model path"]
+    work_path = param_dict["work path"]
+    video_id = args.video_id if args.video_id else param_dict["video Id"]
+    audio_remove_model_name_and_path = param_dict["audio remove model path"]
 
-    proxies = None if not PROXY else {
-        'http': f"{PROXY}",
-        'https': f"{PROXY}",
-        'socks5': f"{PROXY}"
+    proxies = None if not param_dict["proxy"] else {
+        'http': f"{param_dict["proxy"]}",
+        'https': f"{param_dict["proxy"]}",
+        'socks5': f"{param_dict["proxy"]}"
     }
 
     # create the working directory if it does not exist
-    if not os.path.exists(workPath):
-        os.makedirs(workPath)
-        logging.info(f"Directory {workPath} created.")
+    if not os.path.exists(work_path):
+        os.makedirs(work_path)
+        logging.info(f"Directory {work_path} created.")
 
     logging.info("配置\n" + json.dumps(param_dict, indent=4, ensure_ascii=False) + "\n")
 
     # 下载视频
-    voiceFileName = f"{videoId}.mp4"
-    viedoFileNameAndPath = os.path.join(workPath, voiceFileName)
+    voice_file_name = f"{video_id}.mp4"
+    viedo_file_name_and_path = os.path.join(work_path, voice_file_name)
 
     if param_dict["下载视频"]:
-        logging.info(f"Downloading video {videoId} to {viedoFileNameAndPath}")
+        logging.info(f"Downloading video {video_id} to {viedo_file_name_and_path}")
         try:
             # 如果已经有了，就不下载了
-            if os.path.exists(viedoFileNameAndPath):
-                logging.info(f"Video {videoId} already exists.")
+            if os.path.exists(viedo_file_name_and_path):
+                logging.info(f"Video {video_id} already exists.")
                 logging.info(f"[WORK -] Skip downloading video.")
             else:
-                yt = YouTube(f'https://www.youtube.com/watch?v={videoId}', proxies=proxies, on_progress_callback=on_progress)
+                yt = YouTube(f'https://www.youtube.com/watch?v={video_id}', proxies=proxies, on_progress_callback=on_progress)
                 video = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').asc().first()
-                video.download(output_path=workPath, filename=voiceFileName)
+                video.download(output_path=work_path, filename=voice_file_name)
                 # go back to the script directory
-                logging.info(f"[WORK o] Download video {videoId} to {viedoFileNameAndPath} whith {video.resolution}.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Program blocked while downloading video {videoId} to {viedoFileNameAndPath}."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
+                logging.info(f"[WORK o] Download video {video_id} to {viedo_file_name_and_path} whith {video.resolution}.")
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while downloading video {video_id} to {viedo_file_name_and_path}."
+            logging.exception(log_str)
             sys.exit(-1)
     else:
-        logStr = "[WORK -] Skip downloading video."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip downloading video."
+        logging.info(log_str)
 
     # try download more high-definition video
     # 需要单独下载最高分辨率视频，因为pytube下载的1080p视频没音频
-    voiceFhdFileName = f"{videoId}_fhd.mp4"
-    voiceFhdFileNameAndPath = os.path.join(workPath, voiceFhdFileName)
+    voice_fhd_file_name = f"{video_id}_fhd.mp4"
+    voice_fhd_file_name_and_path = os.path.join(work_path, voice_fhd_file_name)
     if param_dict["下载高清视频"]:
         try:
             # 如果已经有了，就不下载了
-            if os.path.exists(voiceFhdFileNameAndPath):
-                logging.info(f"Video {videoId} already exists.")
+            if os.path.exists(voice_fhd_file_name_and_path):
+                logging.info(f"Video {video_id} already exists.")
                 logging.info(f"[WORK -] Skip downloading video.")
             else:
-                logging.info(f"Try to downloading more high-definition video {videoId} to {voiceFhdFileNameAndPath}")
-                yt = YouTube(f'https://www.youtube.com/watch?v={videoId}', proxies=proxies, on_progress_callback=on_progress)
+                logging.info(f"Try to downloading more high-definition video {video_id} to {voice_fhd_file_name_and_path}")
+                yt = YouTube(f'https://www.youtube.com/watch?v={video_id}', proxies=proxies, on_progress_callback=on_progress)
                 video = yt.streams.filter(progressive=False, file_extension='mp4').order_by('resolution').desc().first()
-                video.download(output_path=workPath, filename=voiceFhdFileName)
-                logging.info(f"[WORK o] Download 1080p high-definition {videoId} to {voiceFhdFileNameAndPath} whith {video.resolution}.")
-        except:
-            logStr = f"[WORK x] Error: Program blocked while downloading high-definition video {videoId} to {voiceFhdFileNameAndPath} whith {video.resolution}."
-            logging.info(logStr)
-            logStr = f"Program will not exit for that the error is not critical."
-            logging.info(logStr)
+                video.download(output_path=work_path, filename=voice_fhd_file_name)
+                logging.info(f"[WORK o] Download 1080p high-definition {video_id} to {voice_fhd_file_name_and_path} whith {video.resolution}.")
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while downloading high-definition video {video_id} to {voice_fhd_file_name_and_path}."
+            logging.exception(log_str)
+            log_str = f"Program will not exit for that the error is not critical."
+            logging.info(log_str)
     else:
-        logStr = "[WORK -] Skip downloading high-definition video."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip downloading high-definition video."
+        logging.info(log_str)
 
     # 视频转声音提取
-    audioFileName = f"{videoId}.wav"
-    audioFileNameAndPath = os.path.join(workPath, audioFileName)
+    audio_file_name = f"{video_id}.wav"
+    audio_file_name_and_path = os.path.join(work_path, audio_file_name)
     if param_dict["extract audio"]:
         # remove the audio file if it exists
-        logging.info(f"Extracting audio from {viedoFileNameAndPath} to {audioFileNameAndPath}")
+        logging.info(f"Extracting audio from {viedo_file_name_and_path} to {audio_file_name_and_path}")
         try:
-            video = VideoFileClip(viedoFileNameAndPath)
+            video = VideoFileClip(viedo_file_name_and_path)
             audio = video.audio
-            audio.write_audiofile(audioFileNameAndPath)
-            logging.info(f"[WORK o] Extract audio from {viedoFileNameAndPath} to {audioFileNameAndPath} successfully.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Program blocked while extracting audio from {viedoFileNameAndPath} to {audioFileNameAndPath}."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
+            audio.write_audiofile(audio_file_name_and_path)
+            logging.info(f"[WORK o] Extract audio from {viedo_file_name_and_path} to {audio_file_name_and_path} successfully.")
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while extracting audio from {viedo_file_name_and_path} to {audio_file_name_and_path}."
+            logging.exception(log_str)
             sys.exit(-1)
     else:
-        logStr = "[WORK -] Skip extracting audio."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip extracting audio."
+        logging.info(log_str)
 
     # 去除音频中的音乐
-    voiceName = videoId + "_voice.wav"
-    voiceNameAndPath = os.path.join(workPath, voiceName)
-    insturmentName = videoId + "_insturment.wav"
-    insturmentNameAndPath = os.path.join(workPath, insturmentName)
+    voice_name = video_id + "_voice.wav"
+    voice_name_and_path = os.path.join(work_path, voice_name)
+    insturment_name = video_id + "_insturment.wav"
+    insturment_name_and_path = os.path.join(work_path, insturment_name)
     if param_dict["audio remove"]:
-        logging.info(f"Removing music from {audioFileNameAndPath} to {voiceNameAndPath} and {insturmentNameAndPath}")
+        logging.info(f"Removing music from {audio_file_name_and_path} to {voice_name_and_path} and {insturment_name_and_path}")
         try:
-            audio_remove(audioFileNameAndPath, voiceNameAndPath, insturmentNameAndPath, audioRemoveModelNameAndPath)
-            logging.info(f"[WORK o] Remove music from {audioFileNameAndPath} to {voiceNameAndPath} and {insturmentNameAndPath} successfully.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Program blocked while removing music from {audioFileNameAndPath} to {voiceNameAndPath} and {insturmentNameAndPath}."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
+            audio_remove(audio_file_name_and_path, voice_name_and_path, insturment_name_and_path, audio_remove_model_name_and_path)
+            logging.info(f"[WORK o] Remove music from {audio_file_name_and_path} to {voice_name_and_path} and {insturment_name_and_path} successfully.")
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while removing music from {audio_file_name_and_path} to {voice_name_and_path} and {insturment_name_and_path}."
+            logging.exception(log_str)
             sys.exit(-1)
     else:
-        logStr = "[WORK -] Skip removing music."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip removing music."
+        logging.info(log_str)
 
     # 语音转文字
-    srtEnFileName = videoId + "_en.srt"
-    srtEnFileNameAndPath = os.path.join(workPath, srtEnFileName)
+    srt_en_file_name = video_id + "_en.srt"
+    srt_en_file_name_and_path = os.path.join(work_path, srt_en_file_name)
     if param_dict["audio transcribe"]:
         try:
-            logging.info(f"Transcribing audio from {voiceNameAndPath} to {srtEnFileNameAndPath}")
-            transcribe_audio_en(voiceNameAndPath, param_dict["audio transcribe model"], "en", srtEnFileNameAndPath)
-            logging.info(f"[WORK o] Transcribe audio from {voiceNameAndPath} to {srtEnFileNameAndPath} successfully.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Program blocked while transcribing audio from {voiceNameAndPath} to {srtEnFileNameAndPath}."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
+            logging.info(f"Transcribing audio from {voice_name_and_path} to {srt_en_file_name_and_path}")
+            transcribe_audio_en(voice_name_and_path, param_dict["audio transcribe model"], "en", srt_en_file_name_and_path)
+            logging.info(f"[WORK o] Transcribe audio from {voice_name_and_path} to {srt_en_file_name_and_path} successfully.")
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while transcribing audio from {voice_name_and_path} to {srt_en_file_name_and_path}."
+            logging.exception(log_str)
             sys.exit(-1)
     else:
-        logStr = "[WORK -] Skip transcription."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip transcription."
+        logging.info(log_str)
 
     # 字幕语句合并
-    srtEnFileNameMerge = videoId + "_en_merge.srt"
-    srtEnFileNameMergeAndPath = os.path.join(workPath, srtEnFileNameMerge)
+    srt_en_file_name_merge = video_id + "_en_merge.srt"
+    srt_en_file_name_merge_and_path = os.path.join(work_path, srt_en_file_name_merge)
     if param_dict["srt merge"]:
         try:
-            logging.info(f"Merging sentences in {srtEnFileNameAndPath} to {srtEnFileNameMergeAndPath}")
-            srt_sentance_merge(srtEnFileNameAndPath, srtEnFileNameMergeAndPath)
-            logging.info(f"[WORK o] Merge sentences in {srtEnFileNameAndPath} to {srtEnFileNameMergeAndPath} successfully.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Program blocked while merging sentences in {srtEnFileNameAndPath} to {srtEnFileNameMergeAndPath}."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
+            logging.info(f"Merging sentences in {srt_en_file_name_and_path} to {srt_en_file_name_merge_and_path}")
+            srt_sentance_merge(srt_en_file_name_and_path, srt_en_file_name_merge_and_path)
+            logging.info(f"[WORK o] Merge sentences in {srt_en_file_name_and_path} to {srt_en_file_name_merge_and_path} successfully.")
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while merging sentences in {srt_en_file_name_and_path} to {srt_en_file_name_merge_and_path}."
+            logging.exception(log_str)
             sys.exit(-1)
     else:
-        logStr = "[WORK -] Skip sentence merge."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip sentence merge."
+        logging.info(log_str)
 
     # 字幕翻译
-    srtZhFileName = videoId + "_zh_merge.srt"
-    srtZhFileNameAndPath = os.path.join(workPath, srtZhFileName)
+    srt_zh_file_name = video_id + "_zh_merge.srt"
+    srt_zh_file_name_and_path = os.path.join(work_path, srt_zh_file_name)
     if param_dict["srt merge translate"]:
         try:
-            logging.info(f"Translating subtitle from {srtEnFileNameMergeAndPath} to {srtZhFileNameAndPath}")
+            logging.info(f"Translating subtitle from {srt_en_file_name_merge_and_path} to {srt_zh_file_name_and_path}")
             if param_dict["srt merge translate tool"] == "deepl":
                 if param_dict["srt merge translate key"] == "":
-                    logStr = "[WORK x] Error: DeepL API key is not provided. Please provide it in the parameter file."
-                    logging.info(logStr)
+                    log_str = "[WORK x] Error: DeepL API key is not provided. Please provide it in the parameter file."
+                    logging.info(log_str)
                     sys.exit(-1)
-                srt_file_deepl_tran(srtEnFileNameMergeAndPath, srtZhFileNameAndPath, param_dict["srt merge translate key"])
+                srt_file_deepl_tran(srt_en_file_name_merge_and_path, srt_zh_file_name_and_path, param_dict["srt merge translate key"])
             elif 'gpt' in param_dict["srt merge translate tool"]:
                 if param_dict['srt merge translate key'] == '':
-                    logStr = "[WORK x] Error: GPT API key is not provided. Please provide it in the parameter file."
-                    logging.info(logStr)
+                    log_str = "[WORK x] Error: GPT API key is not provided. Please provide it in the parameter file."
+                    logging.info(log_str)
                     sys.exit(-1)
                 srt_file_gpt_tran(param_dict['srt merge translate tool'],
                                   proxies,
-                                  srtEnFileNameMergeAndPath,
-                                  srtZhFileNameAndPath,
+                                  srt_en_file_name_merge_and_path,
+                                  srt_zh_file_name_and_path,
                                   param_dict['srt merge translate key'])
             else:
-                srt_file_google_tran(srtEnFileNameMergeAndPath, srtZhFileNameAndPath)
-                logging.info(f"[WORK o] Translate subtitle from {srtEnFileNameMergeAndPath} to {srtZhFileNameAndPath} successfully.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Program blocked while translating subtitle from {srtEnFileNameMergeAndPath} to {srtZhFileNameAndPath}."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
+                srt_file_google_tran(proxies, srt_en_file_name_merge_and_path, srt_zh_file_name_and_path)
+                logging.info(f"[WORK o] Translate subtitle from {srt_en_file_name_merge_and_path} to {srt_zh_file_name_and_path} successfully.")
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while translating subtitle from {srt_en_file_name_merge_and_path} to {srt_zh_file_name_and_path}."
+            logging.exception(log_str)
             sys.exit(-1)
     else:
-        logStr = "[WORK -] Skip subtitle translation."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip subtitle translation."
+        logging.info(log_str)
 
     # 字幕转语音
-    ttsSelect = param_dict["TTS"]
-    voiceDir = os.path.join(workPath, videoId + "_zh_source")
-    voiceSrcSrtName = "zh.srt"
-    voiceSrcSrtNameAndPath = os.path.join(voiceDir, voiceSrcSrtName)
-    voiceSrcMapName = "voiceMap.srt"
-    voiceSrcMapNameAndPath = os.path.join(voiceDir, voiceSrcMapName)
+    tts_select = param_dict["TTS"]
+    voice_dir = os.path.join(work_path, video_id + "_zh_source")
     if param_dict["srt to voice srouce"]:
         try:
-            if ttsSelect == "GPT-SoVITS":
-                logging.info(f"Converting subtitle to voice by GPT-SoVITS  in {srtZhFileNameAndPath} to {voiceDir}")
-                voiceUrl = param_dict["TTS param"]
-                srt_to_voice(voiceUrl, srtZhFileNameAndPath, voiceDir)
+            if tts_select == "GPT-SoVITS":
+                logging.info(f"Converting subtitle to voice by GPT-SoVITS  in {srt_zh_file_name_and_path} to {voice_dir}")
+                voice_url = param_dict["TTS param"]
+                srt_to_voice(voice_url, srt_zh_file_name_and_path, voice_dir)
             else:
                 charator = param_dict["TTS param"]
                 if charator == "":
-                    srt_to_voice_edge(srtZhFileNameAndPath, voiceDir)
+                    srt_to_voice_edge(srt_zh_file_name_and_path, voice_dir)
                 else:
-                    srt_to_voice_edge(srtZhFileNameAndPath, voiceDir, charator)
-                logging.info(f"Converting subtitle to voice by EdgeTTS in {srtZhFileNameAndPath} to {voiceDir}")
-            logging.info(f"[WORK o] Convert subtitle to voice in {srtZhFileNameAndPath} to {voiceDir} successfully.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Program blocked while converting subtitle to voice in {srtZhFileNameAndPath} to {voiceDir}."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
+                    srt_to_voice_edge(srt_zh_file_name_and_path, voice_dir, charator)
+                logging.info(f"Converting subtitle to voice by EdgeTTS in {srt_zh_file_name_and_path} to {voice_dir}")
+            logging.info(f"[WORK o] Convert subtitle to voice in {srt_zh_file_name_and_path} to {voice_dir} successfully.")
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while converting subtitle to voice in {srt_zh_file_name_and_path} to {voice_dir}."
+            logging.exception(log_str)
             sys.exit(-1)
     else:
-        logStr = "[WORK -] Skip voice conversion."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip voice conversion."
+        logging.info(log_str)
 
     # 语音合并
-    voiceConnectedName = videoId + "_zh.wav"
-    voiceConnectedNameAndPath = os.path.join(workPath, voiceConnectedName)
+    voice_connected_name = video_id + "_zh.wav"
+    voice_connected_name_and_path = os.path.join(work_path, voice_connected_name)
     if param_dict["voice connect"]:
         try:
-            logging.info(f"Connecting voice in {voiceDir} to {voiceConnectedNameAndPath}")
-            ret = voice_connect(voiceDir, voiceConnectedNameAndPath)
+            logging.info(f"Connecting voice in {voice_dir} to {voice_connected_name_and_path}")
+            ret = voice_connect(voice_dir, voice_connected_name_and_path)
             if ret:
-                logging.info(f"[WORK o] Connect voice in {voiceDir} to {voiceConnectedNameAndPath} successfully.")
+                logging.info(f"[WORK o] Connect voice in {voice_dir} to {voice_connected_name_and_path} successfully.")
             else:
-                logging.info(f"[WORK x] Connect voice in {voiceDir} to {voiceConnectedNameAndPath} failed.")
+                logging.info(f"[WORK x] Connect voice in {voice_dir} to {voice_connected_name_and_path} failed.")
                 sys.exit(-1)
-        except Exception as e:
-            logStr = f"[WORK x] Error: Program blocked while connecting voice in {voiceDir} to {voiceConnectedNameAndPath}."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while connecting voice in {voice_dir} to {voice_connected_name_and_path}."
+            logging.exception(log_str)
             sys.exit(-1)
     else:
-        logStr = "[WORK -] Skip voice connection."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip voice connection."
+        logging.info(log_str)
 
     # 合成后的语音转文字
-    srtVoiceFileName = videoId + "_zh.srt"
-    srtVoiceFileNameAndPath = os.path.join(workPath, srtVoiceFileName)
+    srt_voice_file_name = video_id + "_zh.srt"
+    srt_voice_file_name_and_path = os.path.join(work_path, srt_voice_file_name)
     if param_dict["audio zh transcribe"]:
         try:
-            if os.path.exists(srtVoiceFileNameAndPath):
-                logging.info("srtVoiceFileNameAndPath exists.")
+            if os.path.exists(srt_voice_file_name_and_path):
+                logging.info("srt_voice_file_name_and_path exists.")
             else:
-                logging.info(f"Transcribing audio from {voiceConnectedNameAndPath} to {srtVoiceFileNameAndPath}")
-                transcribe_audio_zh(voiceConnectedNameAndPath, param_dict["audio zh transcribe model"], "zh", srtVoiceFileNameAndPath)
-                logging.info(f"[WORK o] Transcribe audio from {voiceConnectedNameAndPath} to {srtVoiceFileNameAndPath} successfully.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Program blocked while transcribing audio from {voiceConnectedNameAndPath} to {srtVoiceFileNameAndPath}."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
+                logging.info(f"Transcribing audio from {voice_connected_name_and_path} to {srt_voice_file_name_and_path}")
+                transcribe_audio_zh(voice_connected_name_and_path, param_dict["audio zh transcribe model"], srt_voice_file_name_and_path)
+                logging.info(f"[WORK o] Transcribe audio from {voice_connected_name_and_path} to {srt_voice_file_name_and_path} successfully.")
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while transcribing audio from {voice_connected_name_and_path} to {srt_voice_file_name_and_path}."
+            logging.exception(log_str)
             sys.exit(-1)
     else:
-        logStr = "[WORK -] Skip transcription."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip transcription."
+        logging.info(log_str)
 
     # 合成预览视频
-    previewVideoName = videoId + "_preview.mp4"
-    previewVideoNameAndPath = os.path.join(workPath, previewVideoName)
+    preview_video_name = video_id + "_preview.mp4"
+    preview_video_name_and_path = os.path.join(work_path, preview_video_name)
     if param_dict["video zh preview"]:
         try:
-            sourceVideoNameAndPath = ""
-            if os.path.exists(voiceFhdFileNameAndPath):
-                sourceVideoNameAndPath = voiceFhdFileNameAndPath
-            elif os.path.exists(viedoFileNameAndPath):
-                logging.info(f"Cannot find high-definition video, use low-definition video {viedoFileNameAndPath} for preview video {previewVideoNameAndPath}")
-                sourceVideoNameAndPath = viedoFileNameAndPath
+            if os.path.exists(voice_fhd_file_name_and_path):
+                source_video_name_and_path = voice_fhd_file_name_and_path
+            elif os.path.exists(viedo_file_name_and_path):
+                logging.info(f"Cannot find high-definition video, use low-definition video {viedo_file_name_and_path} for preview video {preview_video_name_and_path}")
+                source_video_name_and_path = viedo_file_name_and_path
             else:
-                logStr = f"[WORK x] Error: Cannot find source video for preview video {previewVideoNameAndPath}."
-                logging.info(logStr)
+                log_str = f"[WORK x] Error: Cannot find source video for preview video {preview_video_name_and_path}."
+                logging.info(log_str)
                 sys.exit(-1)
 
-            logging.info(f"Generating zh preview video in {previewVideoNameAndPath}")
-            zh_video_preview(sourceVideoNameAndPath, voiceConnectedNameAndPath, insturmentNameAndPath, srtVoiceFileNameAndPath, previewVideoNameAndPath)
-            logging.info(f"[WORK o] Generate zh preview video in {previewVideoNameAndPath} successfully.")
-        except Exception as e:
-            logStr = f"[WORK x] Error: Program blocked while generating zh preview video in {previewVideoNameAndPath}."
-            logging.info(logStr)
-            error_str = traceback.format_exception_only(type(e), e)[-1].strip()
-            logging.info(error_str)
+            logging.info(f"Generating zh preview video in {preview_video_name_and_path}")
+            zh_video_preview(source_video_name_and_path, voice_connected_name_and_path, insturment_name_and_path, srt_voice_file_name_and_path, preview_video_name_and_path)
+            logging.info(f"[WORK o] Generate zh preview video in {preview_video_name_and_path} successfully.")
+        except Exception:
+            log_str = f"[WORK x] Error: Program blocked while generating zh preview video in {preview_video_name_and_path}."
+            logging.exception(log_str)
             sys.exit(-1)
     else:
-        logStr = "[WORK -] Skip zh preview video."
-        logging.info(logStr)
+        log_str = "[WORK -] Skip zh preview video."
+        logging.info(log_str)
 
     logging.info("All done!!")
-    logging.info("dir: " + workPath)
+    logging.info("dir: " + work_path)
+
+
+if __name__ == "__main__":
+    main()

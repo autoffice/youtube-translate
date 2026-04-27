@@ -1,15 +1,15 @@
 {
-    "视频ID": "iMVLoZaJ_1M",
-    "工作目录": "./output",
+    "视频ID": "test_video",
+    "工作目录": "./test_output",
     "音频分离模型路径": "models/audio_separation/baseline.pth",
     "语音转写模型": "medium",
-    "中文语音转写模型": "medium",
     "字幕翻译模型": "qwen3.5-plus",
-    "中英双字幕": true,
+    "中英双字幕": false,
     "双字幕中文字体": "Arial",
     "双字幕中文字号": 10,
     "双字幕英文字体": "Arial",
-    "双字幕英文字号": 8,
+    "双字幕英文字号": 6,
     "中文配音": false,
-    "TTS音色种子": 42
+    "TTS音色种子": 0,
+    "中文语音转写模型": "medium"
 }

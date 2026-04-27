@@ -23,5 +23,8 @@ models--Systran--faster-whisper-*
 build
 dist
 conver
+output
 *.spec
 .idea
+.env
+.claude/

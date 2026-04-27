@@ -66,4 +66,3 @@ def merge_subtitles(
         merged.append(event)
 
     merged.save(output_path)
-    logging.info("双语字幕已保存: %s", output_path)

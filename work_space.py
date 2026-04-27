@@ -64,19 +64,19 @@ def _enable_whisper_debug() -> None:
 def load_env_config() -> Dict:
     """从环境变量加载配置"""
     return {
-        "视频ID": os.getenv("VIDEO_ID", ""),
-        "工作目录": os.getenv("OUTPUT_DIR", "./output"),
-        "音频分离模型路径": os.getenv("AUDIO_SEPARATION_MODEL", "models/audio_separation/baseline.pth"),
-        "语音转写模型": os.getenv("WHISPER_MODEL", "medium"),
-        "中文语音转写模型": os.getenv("WHISPER_ZH_MODEL", "medium"),
-        "字幕翻译模型": os.getenv("TRANSLATE_MODEL", "qwen3.5-plus"),
-        "中英双字幕": os.getenv("DUAL_SUBTITLE", "true").lower() == "true",
-        "双字幕中文字体": os.getenv("DUAL_ZH_FONT", "Arial"),
-        "双字幕中文字号": int(os.getenv("DUAL_ZH_FONTSIZE", "10")),
-        "双字幕英文字体": os.getenv("DUAL_EN_FONT", "Arial"),
-        "双字幕英文字号": int(os.getenv("DUAL_EN_FONTSIZE", "8")),
-        "中文配音": os.getenv("ENABLE_DUBBING", "false").lower() == "true",
-        "TTS音色种子": int(os.getenv("TTS_SPEAKER_SEED", "42")),
+        "VIDEO_ID": os.getenv("VIDEO_ID", ""),
+        "OUTPUT_DIR": os.getenv("OUTPUT_DIR", "./output"),
+        "AUDIO_SEPARATION_MODEL": os.getenv("AUDIO_SEPARATION_MODEL", "models/audio_separation/baseline.pth"),
+        "WHISPER_MODEL": os.getenv("WHISPER_MODEL", "medium"),
+        "WHISPER_ZH_MODEL": os.getenv("WHISPER_ZH_MODEL", "medium"),
+        "TRANSLATE_MODEL": os.getenv("TRANSLATE_MODEL", "qwen3.5-plus"),
+        "DUAL_SUBTITLE": os.getenv("DUAL_SUBTITLE", "true").lower() == "true",
+        "DUAL_ZH_FONT": os.getenv("DUAL_ZH_FONT", "Arial"),
+        "DUAL_ZH_FONTSIZE": int(os.getenv("DUAL_ZH_FONTSIZE", "10")),
+        "DUAL_EN_FONT": os.getenv("DUAL_EN_FONT", "Arial"),
+        "DUAL_EN_FONTSIZE": int(os.getenv("DUAL_EN_FONTSIZE", "8")),
+        "ENABLE_DUBBING": os.getenv("ENABLE_DUBBING", "false").lower() == "true",
+        "TTS_SPEAKER_SEED": int(os.getenv("TTS_SPEAKER_SEED", "42")),
     }
 
 
@@ -122,15 +122,16 @@ def transcribe_audio_en(
         device=device,
         compute_type=compute_type,
         download_root="models/whisper",
-        local_files_only=False,
+        local_files_only=True,
     )
     logging.info("Whisper 模型已加载")
 
-    segments, _ = model.transcribe(
+    segments, info = model.transcribe(
         audio=audio_path,
         language=language,
         word_timestamps=True,
         initial_prompt=initial_prompt,
+        log_progress=True,
     )
 
     # 转换为 SRT 字幕
@@ -138,7 +139,9 @@ def transcribe_audio_en(
     subs = []
     subtitle = None
 
-    for segment in segments:
+    segments_list = list(segments)
+
+    for segment in segments_list:
         for word in segment.words:
             if subtitle is None:
                 subtitle = srt.Subtitle(
@@ -210,7 +213,6 @@ def transcribe_audio_en(
     with open(output_srt_path, "w", encoding="utf-8") as f:
         f.write(content)
 
-    logging.info("SRT 文件已创建: %s", output_srt_path)
     return True
 
 
@@ -514,23 +516,26 @@ def main():
     args = parser.parse_args()
 
     config = load_env_config()
-    video_id = args.video_id if args.video_id else config["视频ID"]
+    video_id = args.video_id if args.video_id else config["VIDEO_ID"]
     if not video_id:
         logging.error("未指定视频 ID，请在 .env 中设置 VIDEO_ID 或使用 -v 参数")
         sys.exit(-1)
 
     # 输出目录为 output/{video_id}
-    base_output_dir = config["工作目录"]
+    base_output_dir = config["OUTPUT_DIR"]
     work_path = os.path.join(base_output_dir, video_id)
-    model_path = config["音频分离模型路径"]
+    model_path = config["AUDIO_SEPARATION_MODEL"]
 
     proxies = None
-    proxy_url = os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
+    proxy_url = os.getenv("DOWNLOAD_PROXY")
     if proxy_url:
         proxies = {"http": proxy_url, "https": proxy_url}
-        logging.info("检测到代理配置，将用于视频下载")
+        logging.info("检测到下载代理配置: %s", proxy_url)
 
     os.makedirs(work_path, exist_ok=True)
+    # 用实际生效的值覆盖配置，再输出日志
+    config["VIDEO_ID"] = video_id
+    config["OUTPUT_DIR"] = work_path
     logging.info("配置:\n%s", json.dumps(config, indent=2, ensure_ascii=False))
 
     # 下载视频（文件不存在时自动下载）
@@ -563,7 +568,7 @@ def main():
     else:
         try:
             video = VideoFileClip(video_file)
-            video.audio.write_audiofile(audio_file)
+            video.audio.write_audiofile(audio_file, logger=None)
             logging.info("音频提取完成: %s", audio_file)
         except Exception:
             logging.exception("音频提取失败")
@@ -590,7 +595,7 @@ def main():
         logging.info("英文字幕已存在，跳过转写: %s", srt_en_file)
     else:
         try:
-            transcribe_audio_en(voice_file, config["语音转写模型"], "en", srt_en_file)
+            transcribe_audio_en(voice_file, config["WHISPER_MODEL"], "en", srt_en_file)
             logging.info("语音转写完成: %s", srt_en_file)
         except Exception:
             logging.exception("语音转写失败")
@@ -614,7 +619,7 @@ def main():
         logging.info("中文字幕已存在，跳过翻译: %s", srt_zh_file)
     else:
         try:
-            srt_translate_dashscope(srt_en_merge_file, srt_zh_file, config["字幕翻译模型"])
+            srt_translate_dashscope(srt_en_merge_file, srt_zh_file, config["TRANSLATE_MODEL"])
             logging.info("字幕翻译完成: %s", srt_zh_file)
         except Exception:
             logging.exception("字幕翻译失败")
@@ -624,7 +629,7 @@ def main():
     voice_dir = os.path.join(work_path, f"{video_id}_zh_source")
     voice_connected_file = os.path.join(work_path, f"{video_id}_zh.wav")
     srt_voice_file = os.path.join(work_path, f"{video_id}_zh.srt")
-    enable_dubbing = config.get("中文配音", False)
+    enable_dubbing = config.get("ENABLE_DUBBING", False)
 
     if enable_dubbing:
         # TTS 生成语音片段（检测 voiceMap.srt 判断是否已完成）
@@ -633,7 +638,7 @@ def main():
             logging.info("语音片段已存在，跳过 TTS: %s", voice_dir)
         else:
             try:
-                seed = config.get("TTS音色种子", 0)
+                seed = config.get("TTS_SPEAKER_SEED", 0)
                 seed = seed if seed > 0 else None
                 srt_to_voice_chattts(srt_zh_file, voice_dir, seed)
                 logging.info("字幕转语音完成: %s", voice_dir)
@@ -660,14 +665,14 @@ def main():
             logging.info("中文字幕已存在，跳过转写: %s", srt_voice_file)
         else:
             try:
-                transcribe_audio_zh(voice_connected_file, config.get("中文语音转写模型", "medium"), srt_voice_file)
+                transcribe_audio_zh(voice_connected_file, config.get("WHISPER_ZH_MODEL", "medium"), srt_voice_file)
                 logging.info("中文语音转写完成: %s", srt_voice_file)
             except Exception:
                 logging.exception("中文语音转写失败")
                 sys.exit(-1)
 
     # 确定最终字幕文件
-    if config.get("中英双字幕"):
+    if config.get("DUAL_SUBTITLE"):
         dual_srt_file = os.path.join(work_path, f"{video_id}_dual.ass")
         if os.path.exists(dual_srt_file):
             logging.info("双语字幕已存在，跳过生成: %s", dual_srt_file)
@@ -677,10 +682,10 @@ def main():
                     srt_zh_file,
                     srt_en_merge_file,
                     dual_srt_file,
-                    config.get("双字幕中文字体", "Arial"),
-                    config.get("双字幕中文字号", 10),
-                    config.get("双字幕英文字体", "Arial"),
-                    config.get("双字幕英文字号", 6),
+                    config.get("DUAL_ZH_FONT", "Arial"),
+                    config.get("DUAL_ZH_FONTSIZE", 10),
+                    config.get("DUAL_EN_FONT", "Arial"),
+                    config.get("DUAL_EN_FONTSIZE", 6),
                 )
                 logging.info("双语字幕生成完成: %s", dual_srt_file)
             except Exception:

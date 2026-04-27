@@ -1,0 +1,20 @@
+Metadata-Version: 2.4
+Name: youtube-translate
+Version: 1.0.0
+Summary: YouTube 视频自动翻译配音工具
+Requires-Python: >=3.8
+Requires-Dist: srt
+Requires-Dist: torch
+Requires-Dist: python-dotenv
+Requires-Dist: faster-whisper
+Requires-Dist: moviepy
+Requires-Dist: pydub
+Requires-Dist: tqdm
+Requires-Dist: yt-dlp
+Requires-Dist: librosa
+Requires-Dist: numpy
+Requires-Dist: soundfile
+Requires-Dist: pysubs2
+Requires-Dist: requests
+Requires-Dist: tenacity
+Requires-Dist: ChatTTS

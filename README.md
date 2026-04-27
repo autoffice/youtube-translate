@@ -50,14 +50,31 @@ cp .env.example .env
 
 ## 使用方法
 
+### 安装
+
+```bash
+# 克隆仓库
+git clone <repository-url>
+cd youtube-translate
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 以开发模式安装包
+pip install -e .
+```
+
 ### 基本用法
 
 ```bash
 # 使用 .env 中的默认配置运行
-python work_space.py
+python -m youtube_translate
 
 # 覆盖视频 ID
-python work_space.py -v VIDEO_ID
+python -m youtube_translate -v VIDEO_ID
+
+# 或者使用命令行工具（安装后可用）
+youtube-translate -v VIDEO_ID
 ```
 
 ### 配置说明

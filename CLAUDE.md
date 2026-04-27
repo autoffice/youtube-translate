@@ -13,18 +13,19 @@ pytvzhen 是一个 YouTube 视频自动翻译配音流水线。它下载 YouTube
 ## 运行方式
 
 ```bash
-# 使用 .env 中的默认配置运行
-python work_space.py
+# 安装
+pip install -e .
 
-# 覆盖视频 ID
-python work_space.py -v VIDEO_ID
+# 运行
+python -m youtube_translate
+python -m youtube_translate -v VIDEO_ID
 ```
 
 ## 环境依赖
 
 - Python 3.8+
 - ffmpeg 必须安装并加入 PATH
-- `pip install -r requirements.txt`
+- `pip install -e .`（或 `pip install -r requirements.txt`）
 - 音频分离需要预训练模型文件（如 `models/audio_separation/baseline.pth`）
 - 配置 `.env` 文件，设置 `DASHSCOPE_API_KEY`（参考 `.env.example`）
 

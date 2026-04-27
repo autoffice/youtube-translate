@@ -1,6 +1,4 @@
-"""
-使用阿里云 DashScope API 进行字幕翻译的工具类
-"""
+"""使用阿里云 DashScope API 进行字幕翻译"""
 import json
 import logging
 import os
@@ -11,7 +9,6 @@ import requests
 import tenacity
 from dotenv import load_dotenv
 
-# 加载环境变量
 load_dotenv()
 
 DEFAULT_MODEL = "qwen3.5-plus"
@@ -30,7 +27,6 @@ class DashScopeTranslator:
         self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
         if not self.api_key:
             raise ValueError("未找到 DASHSCOPE_API_KEY，请在 .env 文件中配置")
-
         self.model_name = model_name
         self.base_url = base_url
         self.terms: Dict[str, str] = {}
@@ -49,12 +45,7 @@ class DashScopeTranslator:
         stop=tenacity.stop_after_attempt(3),
         reraise=True,
     )
-    def _request_api(
-        self,
-        system_text: str,
-        user_text: str,
-        max_tokens: int = 4096,
-    ) -> dict:
+    def _request_api(self, system_text: str, user_text: str, max_tokens: int = 4096) -> dict:
         """调用 DashScope 兼容 API"""
         headers = {
             "Content-Type": "application/json",
@@ -78,23 +69,11 @@ class DashScopeTranslator:
         return response.json()
 
     def translate_batch(self, texts: List[str]) -> List[str]:
-        """
-        批量翻译字幕文本（整体翻译，保留上下文）
-
-        将所有字幕合并为带编号的文本块，一次性翻译，
-        这样模型能看到完整上下文，翻译更连贯准确。
-
-        Args:
-            texts: 待翻译的文本列表
-
-        Returns:
-            翻译结果列表，顺序与输入一致
-        """
+        """批量翻译字幕文本（整体翻译，保留上下文）"""
         if not texts:
             return []
 
         start_time = time.time()
-
         system_text = (
             "你是一个专业的视频字幕翻译器，负责将英文字幕翻译为地道的中文字幕。\n"
             "翻译规则：\n"
@@ -110,10 +89,8 @@ class DashScopeTranslator:
         if self.terms:
             terms_hint = f"\n以下是术语翻译规则：\n{json.dumps(self.terms, ensure_ascii=False)}\n\n"
 
-        # 构建带编号的输入
         numbered_lines = [f"{i+1}. {text}" for i, text in enumerate(texts)]
         input_text = "\n".join(numbered_lines)
-
         user_text = (
             f"{terms_hint}"
             f"请翻译以下 {len(texts)} 条字幕，每行对应输出一条中文翻译（保持编号格式）：\n\n"
@@ -121,28 +98,18 @@ class DashScopeTranslator:
         )
 
         logging.info("开始翻译 %d 条字幕...", len(texts))
-        result = self._request_api(
-            system_text=system_text,
-            user_text=user_text,
-            max_tokens=max(4096, len(texts) * 100),
-        )
-
+        result = self._request_api(system_text=system_text, user_text=user_text, max_tokens=max(4096, len(texts) * 100))
         elapsed = time.time() - start_time
         raw_output = result["choices"][0]["message"]["content"].strip()
-
-        # 解析输出：按行分割，去掉编号前缀
         translated = self._parse_numbered_output(raw_output, len(texts))
-
         logging.info("翻译完成，共 %d 条，耗时: %.2fs", len(texts), elapsed)
         return translated
 
     def _parse_numbered_output(self, raw_output: str, expected_count: int) -> List[str]:
         """解析带编号的翻译输出"""
         lines = [line.strip() for line in raw_output.strip().split("\n") if line.strip()]
-
         results = []
         for line in lines:
-            # 去掉编号前缀，如 "1. " "1、" "1." 等
             stripped = line
             for sep in [". ", "、", "．", ") ", "） "]:
                 dot_pos = line.find(sep)
@@ -151,18 +118,10 @@ class DashScopeTranslator:
                     break
             results.append(stripped)
 
-        # 如果行数不匹配，尝试补齐或截断
         if len(results) < expected_count:
-            logging.warning(
-                "翻译输出行数不足: 期望 %d 行，实际 %d 行，缺失部分保留原文",
-                expected_count, len(results),
-            )
+            logging.warning("翻译输出行数不足: 期望 %d 行，实际 %d 行", expected_count, len(results))
             results.extend([""] * (expected_count - len(results)))
         elif len(results) > expected_count:
-            logging.warning(
-                "翻译输出行数过多: 期望 %d 行，实际 %d 行，截断多余部分",
-                expected_count, len(results),
-            )
+            logging.warning("翻译输出行数过多: 期望 %d 行，实际 %d 行", expected_count, len(results))
             results = results[:expected_count]
-
         return results

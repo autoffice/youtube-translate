@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "youtube-translate"
+version = "1.0.0"
+description = "YouTube 视频自动翻译配音工具"
+requires-python = ">=3.8"
+dependencies = [
+    "srt",
+    "torch",
+    "python-dotenv",
+    "faster-whisper",
+    "moviepy",
+    "pydub",
+    "tqdm",
+    "yt-dlp",
+    "librosa",
+    "numpy",
+    "soundfile",
+    "pysubs2",
+    "requests",
+    "tenacity",
+    "ChatTTS",
+]
+
+[project.scripts]
+youtube-translate = "youtube_translate.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

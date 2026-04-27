@@ -7,7 +7,7 @@ import torch.utils.data
 from tqdm import tqdm
 
 try:
-    from lib import spec_utils
+    from youtube_translate.separator import spec_utils
 except ModuleNotFoundError:
     import spec_utils
 

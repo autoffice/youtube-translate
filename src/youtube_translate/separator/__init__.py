@@ -1,7 +1,4 @@
-"""
-音频人声/伴奏分离工具
-支持平台：Windows (CUDA/CPU)、macOS (MPS/CPU)
-"""
+"""音频人声/伴奏分离模块"""
 import logging
 
 import librosa
@@ -10,7 +7,7 @@ import soundfile as sf
 import torch
 from tqdm import tqdm
 
-from lib import dataset, nets, spec_utils
+from youtube_translate.separator import dataset, nets, spec_utils
 
 FFT_SIZE = 2048
 HOP_SIZE = 1024

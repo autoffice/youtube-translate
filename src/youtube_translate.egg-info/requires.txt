@@ -1,0 +1,15 @@
+srt
+torch
+python-dotenv
+faster-whisper
+moviepy
+pydub
+tqdm
+yt-dlp
+librosa
+numpy
+soundfile
+pysubs2
+requests
+tenacity
+ChatTTS

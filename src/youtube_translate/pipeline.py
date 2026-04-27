@@ -10,7 +10,6 @@ import time
 from typing import Optional
 
 import srt
-from moviepy.editor import VideoFileClip
 from pydub import AudioSegment
 
 from youtube_translate.config import load_env_config
@@ -169,8 +168,9 @@ def main():
         logging.info("音频已存在，跳过提取: %s", audio_file)
     else:
         try:
-            video = VideoFileClip(video_file)
-            video.audio.write_audiofile(audio_file, logger=None)
+            import subprocess
+            cmd = ["ffmpeg", "-i", video_file, "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", audio_file]
+            subprocess.run(cmd, check=True, capture_output=True)
             logging.info("音频提取完成: %s", audio_file)
         except Exception:
             logging.exception("音频提取失败")

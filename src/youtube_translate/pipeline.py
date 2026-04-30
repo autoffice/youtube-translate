@@ -229,7 +229,7 @@ def main():
     logging.info("配置:\n%s", json.dumps(config, indent=2, ensure_ascii=False))
 
     # 下载视频
-    video_file = os.path.join(work_path, f"{video_id}.mp4")
+    video_file = os.path.join(work_path, "01_video.mp4")
     if os.path.exists(video_file):
         logging.info("视频已存在，跳过下载: %s", video_file)
     else:
@@ -241,7 +241,7 @@ def main():
             sys.exit(-1)
 
     # 下载高清视频
-    fhd_file = os.path.join(work_path, f"{video_id}_fhd.mp4")
+    fhd_file = os.path.join(work_path, "01_video_fhd.mp4")
     if os.path.exists(fhd_file):
         logging.info("高清视频已存在，跳过下载: %s", fhd_file)
     else:
@@ -252,7 +252,7 @@ def main():
             logging.exception("高清视频下载失败（非致命错误）")
 
     # 提取音频
-    audio_file = os.path.join(work_path, f"{video_id}.wav")
+    audio_file = os.path.join(work_path, "02_audio.wav")
     if os.path.exists(audio_file):
         logging.info("音频已存在，跳过提取: %s", audio_file)
     else:
@@ -266,8 +266,8 @@ def main():
             sys.exit(-1)
 
     # 音频分离
-    voice_file = os.path.join(work_path, f"{video_id}_voice.wav")
-    instrument_file = os.path.join(work_path, f"{video_id}_instrument.wav")
+    voice_file = os.path.join(work_path, "03_voice.wav")
+    instrument_file = os.path.join(work_path, "03_instrument.wav")
     if os.path.exists(voice_file) and os.path.exists(instrument_file):
         logging.info("人声和伴奏已存在，跳过分离")
         logging.info("  人声: %s", voice_file)
@@ -281,7 +281,7 @@ def main():
             sys.exit(-1)
 
     # 语音转写
-    srt_en_file = os.path.join(work_path, f"{video_id}_en.srt")
+    srt_en_file = os.path.join(work_path, "04_en.srt")
     if os.path.exists(srt_en_file):
         logging.info("英文字幕已存在，跳过转写: %s", srt_en_file)
     else:
@@ -293,7 +293,7 @@ def main():
             sys.exit(-1)
 
     # 字幕语句合并
-    srt_en_merge_file = os.path.join(work_path, f"{video_id}_en_merge.srt")
+    srt_en_merge_file = os.path.join(work_path, "05_en_merge.srt")
     if os.path.exists(srt_en_merge_file):
         logging.info("合并字幕已存在，跳过合并: %s", srt_en_merge_file)
     else:
@@ -305,8 +305,8 @@ def main():
             sys.exit(-1)
 
     # 字幕翻译
-    srt_zh_file = os.path.join(work_path, f"{video_id}_zh_merge.srt")
-    metadata_file = os.path.join(work_path, f"{video_id}_metadata.json")
+    srt_zh_file = os.path.join(work_path, "06_zh.srt")
+    metadata_file = os.path.join(work_path, "06_metadata.json")
     if os.path.exists(srt_zh_file):
         logging.info("中文字幕已存在，跳过翻译: %s", srt_zh_file)
     else:
@@ -318,9 +318,9 @@ def main():
             sys.exit(-1)
 
     # 中文配音（可选）
-    voice_dir = os.path.join(work_path, f"{video_id}_zh_source")
-    voice_connected_file = os.path.join(work_path, f"{video_id}_zh.wav")
-    srt_voice_file = os.path.join(work_path, f"{video_id}_zh.srt")
+    voice_dir = os.path.join(work_path, "07_tts_source")
+    voice_connected_file = os.path.join(work_path, "08_zh_voice.wav")
+    srt_voice_file = os.path.join(work_path, "09_zh.srt")
     enable_dubbing = config.get("ENABLE_DUBBING", False)
 
     if enable_dubbing:
@@ -362,7 +362,7 @@ def main():
 
     # 确定最终字幕文件
     if config.get("DUAL_SUBTITLE"):
-        dual_srt_file = os.path.join(work_path, f"{video_id}_dual.ass")
+        dual_srt_file = os.path.join(work_path, "10_dual.ass")
         if os.path.exists(dual_srt_file):
             logging.info("双语字幕已存在，跳过生成: %s", dual_srt_file)
         else:
@@ -382,7 +382,7 @@ def main():
         final_srt = srt_zh_file
 
     # 合成最终视频
-    output_file = os.path.join(work_path, f"{video_id}_output.mp4")
+    output_file = os.path.join(work_path, "11_output.mp4")
     if os.path.exists(output_file):
         logging.info("最终视频已存在，跳过合成: %s", output_file)
     else:
@@ -405,7 +405,7 @@ def main():
     logging.info("输出目录: %s", work_path)
 
     # 生成封面图片
-    cover_file = os.path.join(work_path, f"{video_id}_cover.jpg")
+    cover_file = os.path.join(work_path, "12_cover.jpg")
     if os.path.exists(cover_file):
         logging.info("封面已存在，跳过生成: %s", cover_file)
     else:

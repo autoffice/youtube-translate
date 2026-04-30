@@ -104,11 +104,14 @@ def _generate_cover(video_path: str, cover_path: str, metadata_path: str) -> Non
             metadata = json.load(f)
         title = metadata.get("title", "")
 
-    # 从视频截取一帧作为底图
+    # 从视频中间位置截取一帧作为底图（更有代表性）
     frame_path = cover_path.replace(".jpg", "_frame.jpg")
     cmd = [
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-i", video_path, "-vf", "select=eq(pict_type\\,I)", "-frames:v", "1",
+        "-ss", "00:00:03",  # 跳过前 3 秒（避免黑屏/片头）
+        "-i", video_path,
+        "-vf", "select=eq(pict_type\\,I)",  # 选择关键帧
+        "-frames:v", "1",
         "-q:v", "2", frame_path,
     ]
     subprocess.run(cmd, check=True)

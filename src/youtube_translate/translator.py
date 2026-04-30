@@ -45,7 +45,7 @@ class DashScopeTranslator:
         stop=tenacity.stop_after_attempt(3),
         reraise=True,
     )
-    def _request_api(self, system_text: str, user_text: str, max_tokens: int = 4096) -> dict:
+    def _request_api(self, system_text: str, user_text: str, max_tokens: int = 8192) -> dict:
         """调用 DashScope 兼容 API"""
         headers = {
             "Content-Type": "application/json",
@@ -98,7 +98,7 @@ class DashScopeTranslator:
         )
 
         logging.info("开始翻译 %d 条字幕...", len(texts))
-        result = self._request_api(system_text=system_text, user_text=user_text, max_tokens=max(4096, len(texts) * 100))
+        result = self._request_api(system_text=system_text, user_text=user_text, max_tokens=8192)
         elapsed = time.time() - start_time
         raw_output = result["choices"][0]["message"]["content"].strip()
         translated = self._parse_numbered_output(raw_output, len(texts))
@@ -143,7 +143,7 @@ class DashScopeTranslator:
         user_text = f"以下是视频的中文字幕内容，请生成标题、标签和描述：\n\n{full_text}"
 
         logging.info("正在生成视频元数据...")
-        result = self._request_api(system_text=system_text, user_text=user_text, max_tokens=1024)
+        result = self._request_api(system_text=system_text, user_text=user_text, max_tokens=8192)
         raw_output = result["choices"][0]["message"]["content"].strip()
 
         if "```" in raw_output:

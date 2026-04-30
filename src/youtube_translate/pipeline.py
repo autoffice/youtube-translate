@@ -14,7 +14,7 @@ from pydub import AudioSegment
 
 from youtube_translate.config import load_env_config
 from youtube_translate.separator import audio_remove
-from youtube_translate.transcriber import transcribe_audio_en, transcribe_audio_zh, srt_sentence_merge
+from youtube_translate.transcriber import transcribe_audio_en, transcribe_audio_zh
 from youtube_translate.translator import DashScopeTranslator
 from youtube_translate.subtitle import merge_subtitles
 from youtube_translate.tts import srt_to_voice_chattts
@@ -281,7 +281,7 @@ def main():
             logging.exception("音频分离失败")
             sys.exit(-1)
 
-    # 语音转写
+    # 语音转写（直接输出句级字幕）
     srt_en_file = os.path.join(work_path, "04_en.srt")
     if os.path.exists(srt_en_file):
         logging.info("英文字幕已存在，跳过转写: %s", srt_en_file)
@@ -293,35 +293,23 @@ def main():
             logging.exception("语音转写失败")
             sys.exit(-1)
 
-    # 字幕语句合并
-    srt_en_merge_file = os.path.join(work_path, "05_en_merge.srt")
-    if os.path.exists(srt_en_merge_file):
-        logging.info("合并字幕已存在，跳过合并: %s", srt_en_merge_file)
-    else:
-        try:
-            srt_sentence_merge(srt_en_file, srt_en_merge_file)
-            logging.info("字幕合并完成: %s", srt_en_merge_file)
-        except Exception:
-            logging.exception("字幕合并失败")
-            sys.exit(-1)
-
     # 字幕翻译
-    srt_zh_file = os.path.join(work_path, "06_zh.srt")
-    metadata_file = os.path.join(work_path, "06_metadata.json")
+    srt_zh_file = os.path.join(work_path, "05_zh.srt")
+    metadata_file = os.path.join(work_path, "05_metadata.json")
     if os.path.exists(srt_zh_file):
         logging.info("中文字幕已存在，跳过翻译: %s", srt_zh_file)
     else:
         try:
-            _srt_translate_dashscope(srt_en_merge_file, srt_zh_file, config["TRANSLATE_MODEL"], metadata_file)
+            _srt_translate_dashscope(srt_en_file, srt_zh_file, config["TRANSLATE_MODEL"], metadata_file)
             logging.info("字幕翻译完成: %s", srt_zh_file)
         except Exception:
             logging.exception("字幕翻译失败")
             sys.exit(-1)
 
     # 中文配音（可选）
-    voice_dir = os.path.join(work_path, "07_tts_source")
-    voice_connected_file = os.path.join(work_path, "08_zh_voice.wav")
-    srt_voice_file = os.path.join(work_path, "09_zh.srt")
+    voice_dir = os.path.join(work_path, "06_tts_source")
+    voice_connected_file = os.path.join(work_path, "07_zh_voice.wav")
+    srt_voice_file = os.path.join(work_path, "08_zh.srt")
     enable_dubbing = config.get("ENABLE_DUBBING", False)
 
     if enable_dubbing:
@@ -363,13 +351,13 @@ def main():
 
     # 确定最终字幕文件
     if config.get("DUAL_SUBTITLE"):
-        dual_srt_file = os.path.join(work_path, "10_dual.ass")
+        dual_srt_file = os.path.join(work_path, "09_dual.ass")
         if os.path.exists(dual_srt_file):
             logging.info("双语字幕已存在，跳过生成: %s", dual_srt_file)
         else:
             try:
                 merge_subtitles(
-                    srt_zh_file, srt_en_merge_file, dual_srt_file,
+                    srt_zh_file, srt_en_file, dual_srt_file,
                     config.get("DUAL_ZH_FONT", "Arial"), config.get("DUAL_ZH_FONTSIZE", 10),
                     config.get("DUAL_EN_FONT", "Arial"), config.get("DUAL_EN_FONTSIZE", 6),
                 )
@@ -383,7 +371,7 @@ def main():
         final_srt = srt_zh_file
 
     # 合成最终视频
-    output_file = os.path.join(work_path, "11_output.mp4")
+    output_file = os.path.join(work_path, "10_output.mp4")
     if os.path.exists(output_file):
         logging.info("最终视频已存在，跳过合成: %s", output_file)
     else:
@@ -406,7 +394,7 @@ def main():
     logging.info("输出目录: %s", work_path)
 
     # 生成封面图片
-    cover_file = os.path.join(work_path, "12_cover.jpg")
+    cover_file = os.path.join(work_path, "11_cover.jpg")
     if os.path.exists(cover_file):
         logging.info("封面已存在，跳过生成: %s", cover_file)
     else:

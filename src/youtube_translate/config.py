@@ -13,7 +13,6 @@ def load_env_config() -> Dict:
     return {
         "VIDEO_ID": os.getenv("VIDEO_ID", ""),
         "OUTPUT_DIR": os.getenv("OUTPUT_DIR", "./output"),
-        "AUDIO_SEPARATION_MODEL": os.getenv("AUDIO_SEPARATION_MODEL", "models/audio_separation/baseline.pth"),
         "WHISPER_MODEL": os.getenv("WHISPER_MODEL", "medium"),
         "WHISPER_ZH_MODEL": os.getenv("WHISPER_ZH_MODEL", "medium"),
         "TRANSLATE_MODEL": os.getenv("TRANSLATE_MODEL", "qwen3.5-plus"),

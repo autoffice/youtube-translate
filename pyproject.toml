@@ -15,7 +15,6 @@ dependencies = [
     "pydub",
     "tqdm",
     "yt-dlp",
-    "librosa",
     "numpy",
     "soundfile",
     "pysubs2",
@@ -23,6 +22,8 @@ dependencies = [
     "tenacity",
     "ChatTTS",
     "biliup",
+    "demucs",
+    "torchaudio",
 ]
 
 [project.scripts]

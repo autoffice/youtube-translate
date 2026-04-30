@@ -215,7 +215,6 @@ def main():
 
     base_output_dir = config["OUTPUT_DIR"]
     work_path = os.path.join(base_output_dir, video_id)
-    model_path = config["AUDIO_SEPARATION_MODEL"]
 
     proxies = None
     proxy_url = os.getenv("DOWNLOAD_PROXY")
@@ -276,7 +275,7 @@ def main():
         logging.info("  伴奏: %s", instrument_file)
     else:
         try:
-            audio_remove(audio_file, voice_file, instrument_file, model_path)
+            audio_remove(audio_file, voice_file, instrument_file)
             logging.info("音频分离完成")
         except Exception:
             logging.exception("音频分离失败")

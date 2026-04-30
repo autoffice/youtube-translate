@@ -7,7 +7,6 @@ Requires-Dist: srt
 Requires-Dist: torch
 Requires-Dist: python-dotenv
 Requires-Dist: faster-whisper
-Requires-Dist: moviepy
 Requires-Dist: pydub
 Requires-Dist: tqdm
 Requires-Dist: yt-dlp
@@ -18,3 +17,4 @@ Requires-Dist: pysubs2
 Requires-Dist: requests
 Requires-Dist: tenacity
 Requires-Dist: ChatTTS
+Requires-Dist: biliup

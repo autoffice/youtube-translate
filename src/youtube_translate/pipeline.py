@@ -19,6 +19,7 @@ from youtube_translate.translator import DashScopeTranslator
 from youtube_translate.subtitle import merge_subtitles
 from youtube_translate.tts import srt_to_voice_chattts
 from youtube_translate.video import download_video, compose_video, check_ffmpeg
+from youtube_translate.uploader import upload_to_bilibili
 
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
@@ -35,7 +36,7 @@ def _setup_logging() -> None:
     )
 
 
-def _srt_translate_dashscope(source_path: str, output_path: str, model_name: str) -> None:
+def _srt_translate_dashscope(source_path: str, output_path: str, model_name: str, metadata_path: str = "") -> None:
     with open(source_path, "r", encoding="utf-8") as f:
         sub_list = list(srt.parse(f.read()))
 
@@ -51,6 +52,94 @@ def _srt_translate_dashscope(source_path: str, output_path: str, model_name: str
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(srt.compose(sub_list))
+
+    # 生成视频元数据（标题、标签、描述）
+    if metadata_path:
+        if os.path.exists(metadata_path):
+            logging.info("视频元数据已存在，跳过生成: %s", metadata_path)
+        else:
+            try:
+                metadata = translator.generate_video_metadata(translated)
+                with open(metadata_path, "w", encoding="utf-8") as f:
+                    json.dump(metadata, f, ensure_ascii=False, indent=2)
+                logging.info("视频元数据已保存: %s", metadata_path)
+            except Exception:
+                logging.exception("视频元数据生成失败")
+
+
+def _get_font_path() -> str:
+    """根据操作系统选择最佳中文字体"""
+    import platform
+    system = platform.system()
+    if system == "Windows":
+        # 微软雅黑粗体
+        candidates = [
+            "C:/Windows/Fonts/msyhbd.ttc",  # 微软雅黑 Bold
+            "C:/Windows/Fonts/msyh.ttc",    # 微软雅黑
+            "C:/Windows/Fonts/simhei.ttf",  # 黑体
+        ]
+    else:
+        # macOS 苹方粗体
+        candidates = [
+            "/System/Library/Fonts/PingFang.ttc",                          # 苹方
+            "/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/STHeiti Medium.ttc",                    # 华文黑体
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        ]
+
+    for path in candidates:
+        if os.path.exists(path):
+            return path.replace("\\", "/")
+
+    return "sans-serif"
+
+
+def _generate_cover(video_path: str, cover_path: str, metadata_path: str) -> None:
+    """从视频截取一帧并叠加标题文字生成封面"""
+    import subprocess
+
+    title = ""
+    if os.path.exists(metadata_path):
+        with open(metadata_path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+        title = metadata.get("title", "")
+
+    # 从视频截取一帧作为底图
+    frame_path = cover_path.replace(".jpg", "_frame.jpg")
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-i", video_path, "-vf", "select=eq(pict_type\\,I)", "-frames:v", "1",
+        "-q:v", "2", frame_path,
+    ]
+    subprocess.run(cmd, check=True)
+
+    if not title:
+        os.rename(frame_path, cover_path)
+        logging.info("封面已生成（无标题）: %s", cover_path)
+        return
+
+    font_path = _get_font_path().replace(":", "\\:")
+    escaped_title = title.replace("'", "'\\''").replace(":", "\\:")
+
+    # 黄色粗体 + 黑色阴影描边
+    drawtext = (
+        f"drawtext=text='{escaped_title}'"
+        f":fontfile='{font_path}'"
+        f":fontsize=56"
+        f":fontcolor=yellow"
+        f":shadowcolor=black:shadowx=3:shadowy=3"
+        f":borderw=2:bordercolor=black"
+        f":x=(w-text_w)/2:y=(h-text_h)/2"
+    )
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-i", frame_path, "-vf", drawtext, cover_path,
+    ]
+    subprocess.run(cmd, check=True)
+
+    if os.path.exists(frame_path):
+        os.remove(frame_path)
+    logging.info("封面已生成: %s", cover_path)
 
 
 def _voice_connect(source_dir: str, output_path: str) -> bool:
@@ -217,11 +306,12 @@ def main():
 
     # 字幕翻译
     srt_zh_file = os.path.join(work_path, f"{video_id}_zh_merge.srt")
+    metadata_file = os.path.join(work_path, f"{video_id}_metadata.json")
     if os.path.exists(srt_zh_file):
         logging.info("中文字幕已存在，跳过翻译: %s", srt_zh_file)
     else:
         try:
-            _srt_translate_dashscope(srt_en_merge_file, srt_zh_file, config["TRANSLATE_MODEL"])
+            _srt_translate_dashscope(srt_en_merge_file, srt_zh_file, config["TRANSLATE_MODEL"], metadata_file)
             logging.info("字幕翻译完成: %s", srt_zh_file)
         except Exception:
             logging.exception("字幕翻译失败")
@@ -313,3 +403,36 @@ def main():
 
     logging.info("全部完成！")
     logging.info("输出目录: %s", work_path)
+
+    # 生成封面图片
+    cover_file = os.path.join(work_path, f"{video_id}_cover.jpg")
+    if os.path.exists(cover_file):
+        logging.info("封面已存在，跳过生成: %s", cover_file)
+    else:
+        try:
+            _generate_cover(output_file, cover_file, metadata_file)
+        except Exception:
+            logging.exception("封面生成失败")
+
+    # 上传到 B 站
+    if config.get("BILIBILI_UPLOAD"):
+        cookie_file = config.get("BILIBILI_COOKIE", "")
+        if not cookie_file:
+            logging.error("未配置 BILIBILI_COOKIE，跳过上传")
+        elif not os.path.exists(metadata_file):
+            logging.error("元数据文件不存在，跳过上传: %s", metadata_file)
+        else:
+            try:
+                source_url = f"https://www.youtube.com/watch?v={video_id}" if config.get("BILIBILI_COPYRIGHT") == 2 else ""
+                upload_to_bilibili(
+                    video_path=output_file,
+                    cover_path=cover_file if os.path.exists(cover_file) else "",
+                    metadata_path=metadata_file,
+                    cookie_file=cookie_file,
+                    tid=config.get("BILIBILI_TID", 188),
+                    copyright=config.get("BILIBILI_COPYRIGHT", 1),
+                    source=source_url,
+                    publish=config.get("BILIBILI_PUBLISH", False),
+                )
+            except Exception:
+                logging.exception("B 站上传失败")

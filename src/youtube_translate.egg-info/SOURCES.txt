@@ -8,6 +8,7 @@ src/youtube_translate/subtitle.py
 src/youtube_translate/transcriber.py
 src/youtube_translate/translator.py
 src/youtube_translate/tts.py
+src/youtube_translate/uploader.py
 src/youtube_translate/video.py
 src/youtube_translate.egg-info/PKG-INFO
 src/youtube_translate.egg-info/SOURCES.txt

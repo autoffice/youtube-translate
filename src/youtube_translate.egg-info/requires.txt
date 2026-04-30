@@ -2,7 +2,6 @@ srt
 torch
 python-dotenv
 faster-whisper
-moviepy
 pydub
 tqdm
 yt-dlp
@@ -13,3 +12,4 @@ pysubs2
 requests
 tenacity
 ChatTTS
+biliup

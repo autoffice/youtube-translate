@@ -24,4 +24,9 @@ def load_env_config() -> Dict:
         "DUAL_EN_FONTSIZE": int(os.getenv("DUAL_EN_FONTSIZE", "8")),
         "ENABLE_DUBBING": os.getenv("ENABLE_DUBBING", "false").lower() == "true",
         "TTS_SPEAKER_SEED": int(os.getenv("TTS_SPEAKER_SEED", "42")),
+        "BILIBILI_UPLOAD": os.getenv("BILIBILI_UPLOAD", "false").lower() == "true",
+        "BILIBILI_PUBLISH": os.getenv("BILIBILI_PUBLISH", "false").lower() == "true",
+        "BILIBILI_COPYRIGHT": int(os.getenv("BILIBILI_COPYRIGHT", "1")),
+        "BILIBILI_TID": int(os.getenv("BILIBILI_TID", "188")),
+        "BILIBILI_COOKIE": os.getenv("BILIBILI_COOKIE", ""),
     }

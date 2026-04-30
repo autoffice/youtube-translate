@@ -125,3 +125,41 @@ class DashScopeTranslator:
             logging.warning("翻译输出行数过多: 期望 %d 行，实际 %d 行", expected_count, len(results))
             results = results[:expected_count]
         return results
+
+    def generate_video_metadata(self, translated_texts: List[str]) -> dict:
+        """根据翻译后的字幕内容，生成视频标题、标签和描述"""
+        full_text = "\n".join(translated_texts[:30])
+
+        system_text = (
+            "你是一个专业的视频内容分析师。根据提供的中文字幕内容，生成视频的标题、标签和描述。\n"
+            "要求：\n"
+            "1. 标题：简洁有吸引力，不超过30个字\n"
+            "2. 标签：5-8个相关标签，逗号分隔\n"
+            "3. 描述：100-200字的视频简介\n"
+            "4. 必须严格按照以下 JSON 格式输出，不要添加任何其他内容：\n"
+            '{"title": "...", "tags": "标签1,标签2,标签3", "desc": "..."}'
+        )
+
+        user_text = f"以下是视频的中文字幕内容，请生成标题、标签和描述：\n\n{full_text}"
+
+        logging.info("正在生成视频元数据...")
+        result = self._request_api(system_text=system_text, user_text=user_text, max_tokens=1024)
+        raw_output = result["choices"][0]["message"]["content"].strip()
+
+        if "```" in raw_output:
+            for part in raw_output.split("```"):
+                part = part.strip()
+                if part.startswith("json"):
+                    part = part[4:].strip()
+                if part.startswith("{"):
+                    raw_output = part
+                    break
+
+        try:
+            metadata = json.loads(raw_output)
+        except json.JSONDecodeError:
+            logging.warning("元数据解析失败，使用默认值")
+            metadata = {"title": "翻译视频", "tags": "翻译,字幕", "desc": "自动翻译生成的视频"}
+
+        logging.info("视频元数据生成完成: %s", metadata.get("title", ""))
+        return metadata

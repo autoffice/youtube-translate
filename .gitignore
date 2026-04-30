@@ -27,5 +27,4 @@ output
 *.spec
 .idea
 .env
-.claude/
 .shiftengine

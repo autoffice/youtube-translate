@@ -96,9 +96,15 @@ def audio_remove(
     model.to(device)
     logging.info("模型加载完成")
 
-    X, sr = librosa.load(audio_path, sr=44100, mono=False, dtype=np.float32, res_type="kaiser_fast")
+    X, sr = librosa.load(audio_path, sr=None, mono=False, dtype=np.float32, res_type="kaiser_fast")
     if X.ndim == 1:
         X = np.stack([X, X])
+
+    # 如果采样率不是 44.1kHz，重采样（模型训练时使用的采样率）
+    if sr != 44100:
+        logging.info("重采样音频: %d Hz -> 44100 Hz", sr)
+        X = librosa.resample(X, orig_sr=sr, target_sr=44100, res_type="kaiser_fast")
+        sr = 44100
 
     X_spec = spec_utils.wave_to_spectrogram(X, HOP_SIZE, FFT_SIZE)
     separator = Separator(model=model, device=device)

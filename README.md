@@ -5,7 +5,7 @@
 ## 功能特性
 
 - ✅ 自动下载 YouTube 视频（支持标清和高清）
-- ✅ 音频人声/伴奏分离（基于深度学习）
+- ✅ 音频人声/伴奏分离（Meta Demucs v4，业界最先进）
 - ✅ 英文语音转写（Whisper）
 - ✅ 字幕翻译（阿里云 DashScope API）
 - ✅ AI 自动生成视频标题、标签、描述
@@ -22,6 +22,7 @@
 - Python 3.8+
 - ffmpeg（必须安装并加入 PATH）
 - 阿里云 DashScope API Key
+- （可选）NVIDIA GPU 或 Apple Silicon 加速音频分离
 
 ## 安装
 
@@ -48,10 +49,6 @@ pip install -e .
 cp .env.example .env
 # 编辑 .env 文件，至少设置 DASHSCOPE_API_KEY
 ```
-
-4. 下载音频分离模型
-
-将预训练模型放置到 `models/audio_separation/baseline.pth`
 
 ## 使用方法
 
@@ -95,7 +92,6 @@ OUTPUT_DIR=./output
 # ============================================
 # 模型配置
 # ============================================
-AUDIO_SEPARATION_MODEL=models/audio_separation/baseline.pth
 WHISPER_MODEL=medium
 WHISPER_ZH_MODEL=medium
 TRANSLATE_MODEL=qwen3.5-plus

@@ -8,7 +8,7 @@
 
 ## 项目概述
 
-youtube-translate 是一个 YouTube 视频自动翻译配音工具。它下载 YouTube 视频，提取音频，分离人声与背景音乐，通过 Whisper 将语音转写为英文字幕，使用阿里云 DashScope API 翻译为中文字幕并生成视频元数据（标题/标签/描述），可选生成中文 TTS 配音，最终合成带字幕的视频，并支持自动上传到 B 站。
+youtube-translate 是一个 YouTube 视频自动翻译配音工具。它下载 YouTube 视频，提取音频，使用 Meta Demucs v4 分离人声与背景音乐，通过 Whisper 将语音转写为英文字幕，使用阿里云 DashScope API 翻译为中文字幕并生成视频元数据（标题/标签/描述），可选生成中文 TTS 配音，最终合成带字幕的视频，并支持自动上传到 B 站。
 
 ## 运行方式
 
@@ -27,8 +27,8 @@ youtube-translate -v VIDEO_ID
 - Python 3.8+
 - ffmpeg 必须安装并加入 PATH
 - `pip install -e .`（或 `pip install -r requirements.txt`）
-- 音频分离需要预训练模型文件（如 `models/audio_separation/baseline.pth`）
 - 配置 `.env` 文件，设置 `DASHSCOPE_API_KEY`（参考 `.env.example`）
+- Demucs 模型首次运行时自动下载（约 300MB）
 
 ## 多平台支持
 
@@ -41,8 +41,8 @@ youtube-translate -v VIDEO_ID
 流水线由 `src/youtube_translate/pipeline.py:main()` 编排，通过 `.env` 环境变量控制。所有步骤自动检测输出文件是否存在，已存在则跳过。按顺序执行：
 
 1. **下载视频** — `yt-dlp` 下载 YouTube 视频（标清 + 高清），已存在则跳过
-2. **提取音频** — `ffmpeg` 从视频中提取 WAV 音频
-3. **音频分离** — `separator/` 模块使用神经网络将人声与伴奏分离（基于 UNet 的模型，使用 librosa/torch）
+2. **提取音频** — `ffmpeg` 从视频中提取 48kHz 立体声 WAV 音频
+3. **音频分离** — Meta Demucs v4 (htdemucs) 使用深度学习分离人声与伴奏，支持 CUDA/MPS/CPU 加速
 4. **语音转写** — `faster_whisper`（CTranslate2）生成词级英文 SRT 字幕
 5. **语句合并** — 将词级字幕重组为句级 SRT
 6. **字幕翻译** — 使用阿里云 DashScope API（`translator.py`）整体翻译 SRT，保留上下文。支持术语文件（`resources/terms.json`）
@@ -50,7 +50,7 @@ youtube-translate -v VIDEO_ID
 8. **中文配音**（可选）— 通过 ChatTTS 本地模型将中文字幕转为语音，自动拼接并重新转写
 9. **双语字幕**（可选）— 生成中英双语 ASS 字幕
 10. **视频合成** — FFmpeg 合成视频 + 字幕（+ 中文配音 + 背景音乐）
-11. **生成封面** — 从视频截帧并用 ffmpeg drawtext 叠加标题文字
+11. **生成封面** — 从视频截帧并用 ffmpeg drawtext 叠加黄色标题文字（黑色阴影）
 12. **上传 B 站**（可选）— 使用 biliup 上传视频到 B 站
 
 ## 项目结构
@@ -67,13 +67,8 @@ src/youtube_translate/
 ├── tts.py               # ChatTTS 语音合成
 ├── video.py             # 视频下载（yt-dlp）和合成（ffmpeg）
 ├── uploader.py          # B 站上传（biliup）
-├── separator/           # 音频人声/伴奏分离
-│   ├── __init__.py      # audio_remove 函数 + Separator 类
-│   ├── nets.py          # CascadedNet 模型架构
-│   ├── layers.py        # 网络层（Encoder/Decoder/ASPP/LSTM）
-│   ├── dataset.py       # 数据集处理
-│   ├── spec_utils.py    # 频谱转换工具
-│   └── utils.py         # 图像辅助工具
+├── separator/           # 音频人声/伴奏分离（Demucs v4）
+│   └── __init__.py      # audio_remove 函数，封装 Demucs API
 └── resources/
     └── terms.json       # 翻译术语表
 ```
@@ -86,7 +81,6 @@ src/youtube_translate/
 - `DOWNLOAD_PROXY` — 视频下载代理（可选，仅用于 YouTube）
 - `VIDEO_ID` — YouTube 视频 ID
 - `OUTPUT_DIR` — 输出根目录（实际输出到 `{OUTPUT_DIR}/{VIDEO_ID}/`）
-- `AUDIO_SEPARATION_MODEL` — 人声分离模型权重路径
 - `WHISPER_MODEL` / `WHISPER_ZH_MODEL` — Whisper 模型大小
 - `TRANSLATE_MODEL` — DashScope 翻译模型名
 - `DUAL_SUBTITLE` — 是否生成中英双语字幕

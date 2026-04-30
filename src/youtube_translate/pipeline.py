@@ -260,9 +260,8 @@ def main():
     else:
         try:
             import subprocess
-            # 保留原始采样率和声道数，避免不必要的重采样
-            # 使用 PCM 16-bit 保证音质，后续步骤会根据需要重采样
-            cmd = ["ffmpeg", "-i", video_file, "-vn", "-acodec", "pcm_s16le", "-ar", "48000", "-ac", "2", audio_file]
+            # 使用 44.1kHz 匹配 Demucs 模型要求，避免后续重采样
+            cmd = ["ffmpeg", "-i", video_file, "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", audio_file]
             subprocess.run(cmd, check=True, capture_output=True)
             logging.info("音频提取完成: %s", audio_file)
         except Exception:

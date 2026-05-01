@@ -2,7 +2,7 @@
 *.npy
 *.npz
 *.log
-
+.DS_Store
 *.jpg
 *.png
 

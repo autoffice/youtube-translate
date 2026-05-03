@@ -17,8 +17,3 @@ src/youtube_translate.egg-info/entry_points.txt
 src/youtube_translate.egg-info/requires.txt
 src/youtube_translate.egg-info/top_level.txt
 src/youtube_translate/separator/__init__.py
-src/youtube_translate/separator/dataset.py
-src/youtube_translate/separator/layers.py
-src/youtube_translate/separator/nets.py
-src/youtube_translate/separator/spec_utils.py
-src/youtube_translate/separator/utils.py

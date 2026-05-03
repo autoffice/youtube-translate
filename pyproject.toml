@@ -11,7 +11,7 @@ dependencies = [
     "srt",
     "torch",
     "python-dotenv",
-    "faster-whisper",
+    "openai-whisper",
     "pydub",
     "tqdm",
     "yt-dlp",

@@ -4,14 +4,15 @@ import logging
 
 import srt
 import torch
-from faster_whisper import WhisperModel
+import whisper
 
 
 def _get_whisper_device():
     """获取 Whisper 模型的最优设备"""
     if torch.cuda.is_available():
-        return "cuda", "float16"
-    return "cpu", "int8"
+        return "cuda"
+    # Intel Mac 使用 CPU
+    return "cpu"
 
 
 def transcribe_audio_en(
@@ -21,32 +22,32 @@ def transcribe_audio_en(
     output_srt_path: str,
 ) -> bool:
     """
-    英文语音转文字，直接使用 Whisper 的 segment 输出
+    英文语音转文字，使用原生 OpenAI Whisper
 
-    Whisper 的 segment 基于语音停顿和 VAD（语音活动检测），
-    通常比手动按标点分句更准确，且转写速度更快
+    相比 faster-whisper，原生 Whisper 更稳定，
+    在 Intel Mac 上不会出现段错误
     """
-    device, compute_type = _get_whisper_device()
+    device = _get_whisper_device()
 
-    model = WhisperModel(
-        model_name, device=device, compute_type=compute_type,
-        download_root="models/whisper", local_files_only=True,
-    )
+    logging.info(f"加载 Whisper 模型: {model_name}, 设备: {device}")
+    model = whisper.load_model(model_name, device=device)
     logging.info("Whisper 模型已加载")
 
-    # 直接使用 segment，不需要 word_timestamps
-    segments, info = model.transcribe(
-        audio=audio_path, language=language,
-        initial_prompt=None, log_progress=True,
+    # 转写音频（显示进度条）
+    result = model.transcribe(
+        audio=audio_path,
+        language=language,
+        verbose=False,  # 关闭字幕输出
     )
 
+    # 转换为 SRT 格式
     subs = []
-    for i, segment in enumerate(segments, 1):
+    for i, segment in enumerate(result["segments"], 1):
         sub = srt.Subtitle(
             index=i,
-            start=datetime.timedelta(seconds=segment.start),
-            end=datetime.timedelta(seconds=segment.end),
-            content=segment.text.strip(),
+            start=datetime.timedelta(seconds=segment["start"]),
+            end=datetime.timedelta(seconds=segment["end"]),
+            content=segment["text"].strip(),
         )
         subs.append(sub)
 
@@ -59,24 +60,25 @@ def transcribe_audio_en(
 
 def transcribe_audio_zh(audio_path: str, model_name: str, output_srt_path: str) -> None:
     """中文语音转文字"""
-    device, compute_type = _get_whisper_device()
-    model = WhisperModel(
-        model_name, device=device, compute_type=compute_type,
-        download_root="models/whisper", local_files_only=True,
-    )
+    device = _get_whisper_device()
 
-    segments, _ = model.transcribe(
-        audio=audio_path, language="zh",
-        initial_prompt="简体", log_progress=True,
+    logging.info(f"加载 Whisper 模型: {model_name}, 设备: {device}")
+    model = whisper.load_model(model_name, device=device)
+
+    result = model.transcribe(
+        audio=audio_path,
+        language="zh",
+        initial_prompt="简体",
+        verbose=False,  # 关闭字幕输出
     )
 
     subs = []
-    for i, segment in enumerate(segments, 1):
+    for i, segment in enumerate(result["segments"], 1):
         sub = srt.Subtitle(
             index=i,
-            start=datetime.timedelta(seconds=segment.start),
-            end=datetime.timedelta(seconds=segment.end),
-            content=segment.text.strip(),
+            start=datetime.timedelta(seconds=segment["start"]),
+            end=datetime.timedelta(seconds=segment["end"]),
+            content=segment["text"].strip(),
         )
         subs.append(sub)
 

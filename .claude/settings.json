@@ -24,40 +24,5 @@
     "frontend-design@claude-plugins-official": true,
     "serena@claude-plugins-official": true,
     "playwright@claude-plugins-official": true
-  },
-  "hooks": {
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claude-notify 'CC Notification'"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claude-notify 'CC Stop'"
-          }
-        ]
-      }
-    ],
-    "StopFailure": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claude-notify 'CC StopFailure'"
-          }
-        ]
-      }
-    ]
   }
 }

@@ -1,11 +1,10 @@
 srt
 torch
 python-dotenv
-faster-whisper
+openai-whisper
 pydub
 tqdm
 yt-dlp
-librosa
 numpy
 soundfile
 pysubs2
@@ -13,3 +12,5 @@ requests
 tenacity
 ChatTTS
 biliup
+demucs
+torchaudio

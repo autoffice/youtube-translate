@@ -6,11 +6,10 @@ Requires-Python: >=3.8
 Requires-Dist: srt
 Requires-Dist: torch
 Requires-Dist: python-dotenv
-Requires-Dist: faster-whisper
+Requires-Dist: openai-whisper
 Requires-Dist: pydub
 Requires-Dist: tqdm
 Requires-Dist: yt-dlp
-Requires-Dist: librosa
 Requires-Dist: numpy
 Requires-Dist: soundfile
 Requires-Dist: pysubs2
@@ -18,3 +17,5 @@ Requires-Dist: requests
 Requires-Dist: tenacity
 Requires-Dist: ChatTTS
 Requires-Dist: biliup
+Requires-Dist: demucs
+Requires-Dist: torchaudio

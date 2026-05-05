@@ -43,15 +43,14 @@ youtube-translate -v VIDEO_ID
 1. **下载视频** — `yt-dlp` 下载 YouTube 视频（标清 + 高清），已存在则跳过
 2. **提取音频** — `ffmpeg` 从视频中提取 48kHz 立体声 WAV 音频
 3. **音频分离** — Meta Demucs v4 (htdemucs) 使用深度学习分离人声与伴奏，支持 CUDA/MPS/CPU 加速
-4. **语音转写** — `faster_whisper`（CTranslate2）生成词级英文 SRT 字幕
-5. **语句合并** — 将词级字幕重组为句级 SRT
-6. **字幕翻译** — 使用阿里云 DashScope API（`translator.py`）整体翻译 SRT，保留上下文。支持术语文件（`resources/terms.json`）
-7. **生成元数据** — AI 根据字幕内容自动生成视频标题、标签、描述，保存为 `_metadata.json`
-8. **中文配音**（可选）— 通过 ChatTTS 本地模型将中文字幕转为语音，自动拼接并重新转写
-9. **双语字幕**（可选）— 生成中英双语 ASS 字幕
-10. **视频合成** — FFmpeg 合成视频 + 字幕（+ 中文配音 + 背景音乐）
-11. **生成封面** — 从视频截帧并用 ffmpeg drawtext 叠加黄色标题文字（黑色阴影）
-12. **上传 B 站**（可选）— 使用 biliup 上传视频到 B 站
+4. **语音转写** — `openai-whisper` 生成英文 SRT 字幕
+5. **字幕翻译** — 使用阿里云 DashScope API（`translator.py`）整体翻译 SRT，保留上下文。支持术语文件（`resources/terms.json`）
+6. **生成元数据** — AI 根据字幕内容自动生成视频标题、标签、描述，保存为 `_metadata.json`
+7. **中文配音**（可选）— 通过 ChatTTS 本地模型将中文字幕转为语音并自动拼接
+8. **双语字幕**（可选）— 生成中英双语 ASS 字幕
+9. **视频合成** — FFmpeg 合成视频 + 字幕（+ 中文配音 + 背景音乐）
+10. **生成封面** — 从视频截帧并用 ffmpeg drawtext 叠加黄色标题文字（黑色阴影）
+11. **上传 B 站**（可选）— 使用 biliup 上传视频到 B 站
 
 ## 项目结构
 

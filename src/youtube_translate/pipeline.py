@@ -14,7 +14,7 @@ from pydub import AudioSegment
 
 from youtube_translate.config import load_env_config
 from youtube_translate.separator import audio_remove
-from youtube_translate.transcriber import transcribe_audio_en, transcribe_audio_zh
+from youtube_translate.transcriber import transcribe_audio_en
 from youtube_translate.translator import DashScopeTranslator
 from youtube_translate.subtitle import merge_subtitles
 from youtube_translate.tts import srt_to_voice_chattts
@@ -311,7 +311,6 @@ def main():
     # 中文配音（可选）
     voice_dir = os.path.join(work_path, "06_tts_source")
     voice_connected_file = os.path.join(work_path, "07_zh_voice.wav")
-    srt_voice_file = os.path.join(work_path, "08_zh.srt")
     enable_dubbing = config.get("ENABLE_DUBBING", False)
 
     if enable_dubbing:
@@ -341,19 +340,9 @@ def main():
                 logging.exception("语音拼接失败")
                 sys.exit(-1)
 
-        if os.path.exists(srt_voice_file):
-            logging.info("中文字幕已存在，跳过转写: %s", srt_voice_file)
-        else:
-            try:
-                transcribe_audio_zh(voice_connected_file, config.get("WHISPER_ZH_MODEL", "medium"), srt_voice_file)
-                logging.info("中文语音转写完成: %s", srt_voice_file)
-            except Exception:
-                logging.exception("中文语音转写失败")
-                sys.exit(-1)
-
     # 确定最终字幕文件
     if config.get("DUAL_SUBTITLE"):
-        dual_srt_file = os.path.join(work_path, "09_dual.ass")
+        dual_srt_file = os.path.join(work_path, "08_dual.ass")
         if os.path.exists(dual_srt_file):
             logging.info("双语字幕已存在，跳过生成: %s", dual_srt_file)
         else:
@@ -367,13 +356,11 @@ def main():
             except Exception:
                 logging.exception("双语字幕生成失败")
         final_srt = dual_srt_file
-    elif enable_dubbing:
-        final_srt = srt_voice_file
     else:
         final_srt = srt_zh_file
 
     # 合成最终视频
-    output_file = os.path.join(work_path, "10_output.mp4")
+    output_file = os.path.join(work_path, "09_output.mp4")
     if os.path.exists(output_file):
         logging.info("最终视频已存在，跳过合成: %s", output_file)
     else:
@@ -396,7 +383,7 @@ def main():
     logging.info("输出目录: %s", work_path)
 
     # 生成封面图片
-    cover_file = os.path.join(work_path, "11_cover.jpg")
+    cover_file = os.path.join(work_path, "10_cover.jpg")
     if os.path.exists(cover_file):
         logging.info("封面已存在，跳过生成: %s", cover_file)
     else:
